@@ -112,6 +112,13 @@ For a configured or discovered project, the command now runs this pipeline:
 
 The command refuses to bind stale inventory files from older runs, and it keeps the existing compatibility checks that reject artifacts generated for a different source workspace folder or worktree.
 
+## Coverage Model
+
+- `02-keripy` is the current active, refresh-capable repo because it has a verified Sphinx marker, a working docs Python at `.venv-docs/bin/python`, and a valid inventory-runner path through `01-keri-notes/Devtools/sphinx/run_sphinx_inventory.sh`.
+- `03-hio`, `06-locksmith`, and `07-witness-hk` are passive discovery candidates only. Sphinx Doctor may discover them from high-confidence `conf.py` markers, but refresh stays blocked until each repo has a verified docs Python environment.
+- `08-watcher-hk` and `09-fortweb` are not treated as Sphinx projects until real `conf.py` markers exist.
+- `01-keri-notes`, `11-sphinx-doctor`, and `20-billing-ops-tasks` stay intentionally excluded from source-project discovery.
+
 For the standard KERI workspace layout, Sphinx Doctor can infer a refresh command without a committed `sphinxDoctor.projects` entry when all of the following are true:
 
 - `01-keri-notes` is open in the workspace
@@ -256,7 +263,9 @@ The status bar keeps the watch result visible with short states such as `Sphinx 
 
 ## Workspace Discovery
 
-Workspace discovery is bounded to the folders currently open in VS Code. Sphinx Doctor checks a short list of markers such as `docs/conf.py`, `docs/Makefile`, and a few Sphinx-related config files, then classifies discovered projects as high, medium, or low confidence.
+Workspace discovery is bounded to the folders currently open in VS Code. Sphinx Doctor only discovers repos from high-confidence Sphinx `conf.py` markers such as `docs/conf.py`, `docs/source/conf.py`, `doc/conf.py`, `source/conf.py`, and `conf.py`.
+
+Folders without those markers are skipped instead of being guessed from looser hints such as `Makefile`, `requirements.txt`, or `pyproject.toml`. Discovery logs explain whether each workspace folder was included or skipped and why.
 
 Discovery exclusions can be configured through `sphinxDoctor.discovery.excludeWorkspaceFolders`. For the shared KERI workspace, a typical exclusion set is:
 

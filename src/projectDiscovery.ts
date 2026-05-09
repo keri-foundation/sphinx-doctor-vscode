@@ -19,28 +19,28 @@ export interface DiscoveryOptions {
   availableWorkspaceFolderNames: string[];
 }
 
+export interface DiscoveryDecision {
+  workspaceFolderName: string;
+  outcome: 'discovered' | 'skipped';
+  reason: string;
+  project?: ConfiguredProject;
+}
+
 export interface DiscoveryProbe {
   exists(filePath: string): Promise<boolean>;
   readText(filePath: string): Promise<string | undefined>;
 }
 
-const HIGH_CONFIDENCE_MARKERS = ['docs/conf.py', 'doc/conf.py', 'source/conf.py', 'conf.py'];
-const MEDIUM_CONFIDENCE_EXISTENCE_MARKERS = [
-  'docs/Makefile',
-  'docs/make.bat',
-  'requirements-docs.txt',
-  'requirements/docs.txt',
+const HIGH_CONFIDENCE_MARKERS = [
+  'docs/conf.py',
+  'docs/source/conf.py',
+  'doc/conf.py',
+  'source/conf.py',
+  'conf.py',
 ];
-const MEDIUM_CONFIDENCE_CONTENT_MARKERS = ['pyproject.toml', 'tox.ini', 'noxfile.py'];
-const LOW_CONFIDENCE_MARKERS = ['docs', 'documentation'];
 
 export function buildDiscoveryProbePaths(): string[] {
-  return [
-    ...HIGH_CONFIDENCE_MARKERS,
-    ...MEDIUM_CONFIDENCE_EXISTENCE_MARKERS,
-    ...MEDIUM_CONFIDENCE_CONTENT_MARKERS,
-    ...LOW_CONFIDENCE_MARKERS,
-  ];
+  return [...HIGH_CONFIDENCE_MARKERS];
 }
 
 function docsRootFromMarker(marker: string): string {
@@ -161,45 +161,6 @@ export function detectProjectFromSnapshot(
     }
   }
 
-  for (const marker of MEDIUM_CONFIDENCE_EXISTENCE_MARKERS) {
-    if (snapshot.existingPaths.has(marker)) {
-      return buildDiscoveredProject(
-        folder,
-        'medium',
-        marker.startsWith('docs/') ? 'docs' : '.',
-        [`medium-confidence marker: ${marker}`],
-        options,
-      );
-    }
-  }
-
-  for (const marker of MEDIUM_CONFIDENCE_CONTENT_MARKERS) {
-    const text = snapshot.fileContents[marker]?.toLowerCase();
-    if (text && (text.includes('sphinx') || text.includes('sphinx-build'))) {
-      return buildDiscoveredProject(
-        folder,
-        'medium',
-        marker === 'pyproject.toml' ? 'docs' : '.',
-        [`medium-confidence marker: ${marker} contains Sphinx tooling text`],
-        options,
-      );
-    }
-  }
-
-  if (options.includeLowConfidence) {
-    for (const marker of LOW_CONFIDENCE_MARKERS) {
-      if (snapshot.existingPaths.has(marker)) {
-        return buildDiscoveredProject(
-          folder,
-          'low',
-          marker,
-          [`low-confidence marker: ${marker}/`],
-          options,
-        );
-      }
-    }
-  }
-
   return undefined;
 }
 
@@ -217,15 +178,52 @@ async function collectDiscoverySnapshot(
     }
 
     existingPaths.add(relativePath);
-    if (MEDIUM_CONFIDENCE_CONTENT_MARKERS.includes(relativePath)) {
-      const text = await probe.readText(absolutePath);
-      if (text !== undefined) {
-        fileContents[relativePath] = text;
-      }
-    }
   }
 
   return { existingPaths, fileContents };
+}
+
+export async function discoverWorkspaceProjectDecisions(
+  workspaceFolders: WorkspaceFolderInfo[],
+  options: Omit<DiscoveryOptions, 'availableWorkspaceFolderNames'>,
+  probe: DiscoveryProbe,
+): Promise<DiscoveryDecision[]> {
+  const mergedOptions: DiscoveryOptions = {
+    ...options,
+    availableWorkspaceFolderNames: workspaceFolders.map((folder) => folder.name),
+  };
+
+  const decisions: DiscoveryDecision[] = [];
+  for (const folder of workspaceFolders) {
+    if (mergedOptions.excludeWorkspaceFolderNames.includes(folder.name)) {
+      decisions.push({
+        workspaceFolderName: folder.name,
+        outcome: 'skipped',
+        reason: 'excluded by sphinxDoctor.discovery.excludeWorkspaceFolders',
+      });
+      continue;
+    }
+
+    const snapshot = await collectDiscoverySnapshot(folder, probe);
+    const project = detectProjectFromSnapshot(folder, snapshot, mergedOptions);
+    if (project) {
+      decisions.push({
+        workspaceFolderName: folder.name,
+        outcome: 'discovered',
+        reason: (project.discoveryReasons ?? []).join('; ') || 'high-confidence Sphinx conf.py marker found',
+        project,
+      });
+      continue;
+    }
+
+    decisions.push({
+      workspaceFolderName: folder.name,
+      outcome: 'skipped',
+      reason: 'no high-confidence Sphinx conf.py marker found',
+    });
+  }
+
+  return decisions;
 }
 
 export async function discoverWorkspaceProjects(
@@ -233,25 +231,8 @@ export async function discoverWorkspaceProjects(
   options: Omit<DiscoveryOptions, 'availableWorkspaceFolderNames'>,
   probe: DiscoveryProbe,
 ): Promise<ConfiguredProject[]> {
-  const mergedOptions: DiscoveryOptions = {
-    ...options,
-    availableWorkspaceFolderNames: workspaceFolders.map((folder) => folder.name),
-  };
-
-  const discovered: ConfiguredProject[] = [];
-  for (const folder of workspaceFolders) {
-    if (mergedOptions.excludeWorkspaceFolderNames.includes(folder.name)) {
-      continue;
-    }
-
-    const snapshot = await collectDiscoverySnapshot(folder, probe);
-    const project = detectProjectFromSnapshot(folder, snapshot, mergedOptions);
-    if (project) {
-      discovered.push(project);
-    }
-  }
-
-  return discovered;
+  const decisions = await discoverWorkspaceProjectDecisions(workspaceFolders, options, probe);
+  return decisions.flatMap((decision) => (decision.project ? [decision.project] : []));
 }
 
 export function mergeProjects(

@@ -29,7 +29,7 @@ import {
 } from './refreshRunner';
 import { SphinxDoctorLogger } from './log';
 import { publishDiagnostics } from './publishDiagnostics';
-import { discoverWorkspaceProjects, mergeProjects } from './projectDiscovery';
+import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
 import {
   buildSelfTestStatusTooltip,
   clearPublishedDiagnostics,
@@ -79,6 +79,20 @@ interface SelectedProjectDiagnostics {
   project: ConfiguredProject;
   candidate: DiscoveredInventoryCandidate;
   kind: DiagnosticsFileKind;
+}
+
+function logDiscoveryDecisions(
+  logger: SphinxDoctorLogger,
+  decisions: Array<{
+    workspaceFolderName: string;
+    outcome: 'discovered' | 'skipped';
+    reason: string;
+  }>,
+): void {
+  for (const decision of decisions) {
+    const prefix = decision.outcome === 'discovered' ? 'Discovery include' : 'Discovery skip';
+    logger.info(`${prefix} ${decision.workspaceFolderName}: ${decision.reason}.`);
+  }
 }
 
 function toWorkspaceFolderInfo(
@@ -423,7 +437,7 @@ async function discoverProjectsFromWorkspace(
   }
 
   const workspaceFolders = toWorkspaceFolderInfo(vscode.workspace.workspaceFolders);
-  return discoverWorkspaceProjects(
+  const decisions = await discoverWorkspaceProjectDecisions(
     workspaceFolders,
     {
       includeLowConfidence: config.discoveryIncludeLowConfidence,
@@ -435,6 +449,9 @@ async function discoverProjectsFromWorkspace(
       readText: projectDiscoveryProbeReadText,
     },
   );
+
+  logDiscoveryDecisions(logger, decisions);
+  return decisions.flatMap((decision) => (decision.project ? [decision.project] : []));
 }
 
 async function selectMergedProject(
@@ -461,15 +478,9 @@ async function discoverOnlyProject(
   const discoveredProjects = await discoverProjectsFromWorkspace(logger);
   if (discoveredProjects.length === 0) {
     void vscode.window.showWarningMessage(
-      'Sphinx Doctor did not discover any Sphinx-capable workspace folders. Enable low-confidence discovery if needed.',
+      'Sphinx Doctor did not discover any Sphinx-capable workspace folders with high-confidence conf.py markers.',
     );
     return undefined;
-  }
-
-  for (const project of discoveredProjects) {
-    logger.info(
-      `Discovered ${project.sourceWorkspaceFolder} with ${project.discoveryConfidence ?? 'unknown'} confidence: ${(project.discoveryReasons ?? []).join('; ')}`,
-    );
   }
 
   return selectProject(discoveredProjects);

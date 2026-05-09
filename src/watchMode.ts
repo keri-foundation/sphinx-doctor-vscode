@@ -23,7 +23,7 @@ import {
 } from './loadDiagnostics';
 import { SphinxDoctorLogger } from './log';
 import { publishDiagnosticsBatch, PublishBatchEntry, PublishResult } from './publishDiagnostics';
-import { discoverWorkspaceProjects, mergeProjects } from './projectDiscovery';
+import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
 import { SELF_TEST_STATUS_TEXT } from './selfTest';
 import {
   ConfiguredProject,
@@ -69,6 +69,20 @@ interface WatchPattern {
   key: string;
   basePath: string;
   glob: string;
+}
+
+function logDiscoveryDecisions(
+  logger: SphinxDoctorLogger,
+  decisions: Array<{
+    workspaceFolderName: string;
+    outcome: 'discovered' | 'skipped';
+    reason: string;
+  }>,
+): void {
+  for (const decision of decisions) {
+    const prefix = decision.outcome === 'discovered' ? 'Discovery include' : 'Discovery skip';
+    logger.info(`${prefix} ${decision.workspaceFolderName}: ${decision.reason}.`);
+  }
 }
 
 function toWorkspaceFolderInfo(
@@ -331,8 +345,8 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       return;
     }
 
-    const discoveredProjects = config.discoveryEnabled
-      ? await discoverWorkspaceProjects(
+    const discoveryDecisions = config.discoveryEnabled
+      ? await discoverWorkspaceProjectDecisions(
           workspaceFolders,
           {
             includeLowConfidence: config.discoveryIncludeLowConfidence,
@@ -359,6 +373,11 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
           },
         )
       : [];
+
+    logDiscoveryDecisions(this.logger, discoveryDecisions);
+    const discoveredProjects = discoveryDecisions.flatMap((decision) =>
+      decision.project ? [decision.project] : [],
+    );
 
     this.lastDiscoveredProjectIds = discoveredProjects.map((project) => project.id);
     this.logger.info(
@@ -879,8 +898,8 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     config: ExtensionConfig,
     workspaceFolders: WorkspaceFolderInfo[],
   ): Promise<ConfiguredProject[]> {
-    const discoveredProjects = config.discoveryEnabled
-      ? await discoverWorkspaceProjects(
+    const discoveryDecisions = config.discoveryEnabled
+      ? await discoverWorkspaceProjectDecisions(
           workspaceFolders,
           {
             includeLowConfidence: config.discoveryIncludeLowConfidence,
@@ -907,6 +926,11 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
           },
         )
       : [];
+
+    logDiscoveryDecisions(this.logger, discoveryDecisions);
+    const discoveredProjects = discoveryDecisions.flatMap((decision) =>
+      decision.project ? [decision.project] : [],
+    );
 
     return mergeProjects(config.projects, discoveredProjects);
   }

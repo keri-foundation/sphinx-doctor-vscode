@@ -30,6 +30,7 @@ import {
 } from '../src/config';
 import {
   buildDiscoveryProbePaths,
+  discoverWorkspaceProjectDecisions,
   detectProjectFromSnapshot,
   discoverWorkspaceProjects,
   mergeProjects,
@@ -144,6 +145,51 @@ const configuredProject: ConfiguredProject = {
   inventorySearchGlobs: [
     'tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-*/report/issues.vscode.json',
     'tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-*/report/issues.json',
+  ],
+  preferredInventoryFiles: ['issues.vscode.json', 'issues.json'],
+  mirrorRoot: '.sphinx-diagnostics',
+};
+
+const hioProject: ConfiguredProject = {
+  id: 'hio',
+  label: 'hio',
+  sourceWorkspaceFolder: '03-hio',
+  inventoryWorkspaceFolder: '01-keri-notes',
+  repoRoot: '.',
+  docsRoot: 'docs',
+  inventorySearchGlobs: [
+    'tmp/sphinx-inventory-hio-*/report/issues.vscode.json',
+    'tmp/sphinx-inventory-hio-*/report/issues.json',
+  ],
+  preferredInventoryFiles: ['issues.vscode.json', 'issues.json'],
+  mirrorRoot: '.sphinx-diagnostics',
+};
+
+const locksmithProject: ConfiguredProject = {
+  id: 'locksmith',
+  label: 'locksmith',
+  sourceWorkspaceFolder: '06-locksmith',
+  inventoryWorkspaceFolder: '01-keri-notes',
+  repoRoot: '.',
+  docsRoot: 'docs',
+  inventorySearchGlobs: [
+    'tmp/sphinx-inventory-locksmith-*/report/issues.vscode.json',
+    'tmp/sphinx-inventory-locksmith-*/report/issues.json',
+  ],
+  preferredInventoryFiles: ['issues.vscode.json', 'issues.json'],
+  mirrorRoot: '.sphinx-diagnostics',
+};
+
+const witnessProject: ConfiguredProject = {
+  id: 'witness-hk',
+  label: 'witness-hk',
+  sourceWorkspaceFolder: '07-witness-hk',
+  inventoryWorkspaceFolder: '01-keri-notes',
+  repoRoot: '.',
+  docsRoot: 'docs',
+  inventorySearchGlobs: [
+    'tmp/sphinx-inventory-witness-hk-*/report/issues.vscode.json',
+    'tmp/sphinx-inventory-witness-hk-*/report/issues.json',
   ],
   preferredInventoryFiles: ['issues.vscode.json', 'issues.json'],
   mirrorRoot: '.sphinx-diagnostics',
@@ -442,11 +488,11 @@ test('self-test status text and tooltip stay explicit for visibility debugging',
   );
 });
 
-test('isDiagnosticsBindingCompatible rejects inventories generated for a different worktree', () => {
+test('isDiagnosticsBindingCompatible rejects cross-repo inventory binding for a different worktree', () => {
   const rawMismatch = isDiagnosticsBindingCompatible(
     {
       kind: 'raw',
-      repoRoot: '/workspace/keripy-sphinx-cleanup',
+      repoRoot: '/workspace/hio',
     },
     {
       sourceWorkspaceFolder: '02-keripy',
@@ -660,11 +706,11 @@ test('detectProjectFromSnapshot finds a high-confidence Sphinx project from docs
   assert.equal(project?.inventoryWorkspaceFolder, '01-keri-notes');
 });
 
-test('detectProjectFromSnapshot finds a medium-confidence Sphinx project from docs/Makefile', () => {
+test('detectProjectFromSnapshot finds a high-confidence Sphinx project from docs/source/conf.py', () => {
   const project = detectProjectFromSnapshot(
     { name: '03-hio', fsPath: '/workspace/hio' },
     {
-      existingPaths: new Set(['docs/Makefile']),
+      existingPaths: new Set(['docs/source/conf.py']),
       fileContents: {},
     },
     {
@@ -675,8 +721,9 @@ test('detectProjectFromSnapshot finds a medium-confidence Sphinx project from do
     },
   );
 
-  assert.equal(project?.discoveryConfidence, 'medium');
+  assert.equal(project?.discoveryConfidence, 'high');
   assert.equal(project?.docsRoot, 'docs');
+  assert.equal(project?.sourceWorkspaceFolder, '03-hio');
 });
 
 test('detectProjectFromSnapshot treats 01-keri-notes as a shared inventory root, not the source repo', () => {
@@ -702,23 +749,24 @@ test('detectProjectFromSnapshot treats 01-keri-notes as a shared inventory root,
   );
 });
 
-test('detectProjectFromSnapshot can include a low-confidence docs-only project when enabled', () => {
-  const project = detectProjectFromSnapshot(
-    { name: '09-fortweb', fsPath: '/workspace/fortweb' },
-    {
-      existingPaths: new Set(['docs']),
-      fileContents: {},
-    },
-    {
-      includeLowConfidence: true,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
-      excludeWorkspaceFolderNames: [],
-      availableWorkspaceFolderNames: ['01-keri-notes', '09-fortweb'],
-    },
-  );
+test('detectProjectFromSnapshot ignores docs-only and Makefile-only folders without conf.py markers', () => {
+  for (const existingPaths of [new Set(['docs']), new Set(['docs/Makefile']), new Set(['pyproject.toml'])]) {
+    const project = detectProjectFromSnapshot(
+      { name: '09-fortweb', fsPath: '/workspace/fortweb' },
+      {
+        existingPaths,
+        fileContents: {},
+      },
+      {
+        includeLowConfidence: true,
+        inventoryWorkspaceFolderNames: ['01-keri-notes'],
+        excludeWorkspaceFolderNames: [],
+        availableWorkspaceFolderNames: ['01-keri-notes', '09-fortweb'],
+      },
+    );
 
-  assert.equal(project?.discoveryConfidence, 'low');
-  assert.equal(project?.docsRoot, 'docs');
+    assert.equal(project, undefined);
+  }
 });
 
 test('detectProjectFromSnapshot ignores irrelevant workspace folders', () => {
@@ -760,6 +808,43 @@ test('discoverWorkspaceProjects skips excluded workspace folders', async () => {
   assert.deepEqual(projects.map((project) => project.sourceWorkspaceFolder), ['02-keripy']);
 });
 
+test('discoverWorkspaceProjectDecisions report discovered and skipped workspace folders', async () => {
+  const detectedPaths = new Set([
+    '/workspace/notes/libs/keripy/docs/conf.py',
+    '/workspace/notes/libs/hio/docs/source/conf.py',
+  ]);
+
+  const decisions = await discoverWorkspaceProjectDecisions(
+    [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+      { name: '03-hio', fsPath: '/workspace/notes/libs/hio' },
+      { name: '08-watcher-hk', fsPath: '/workspace/notes/libs/watcher-hk' },
+      { name: '09-fortweb', fsPath: '/workspace/notes/libs/fortweb' },
+    ],
+    {
+      includeLowConfidence: true,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: ['01-keri-notes'],
+    },
+    {
+      exists: async (filePath) => detectedPaths.has(filePath),
+      readText: async () => undefined,
+    },
+  );
+
+  assert.deepEqual(
+    decisions.map((decision) => [decision.workspaceFolderName, decision.outcome, decision.reason]),
+    [
+      ['01-keri-notes', 'skipped', 'excluded by sphinxDoctor.discovery.excludeWorkspaceFolders'],
+      ['02-keripy', 'discovered', 'high-confidence marker: docs/conf.py'],
+      ['03-hio', 'discovered', 'high-confidence marker: docs/source/conf.py'],
+      ['08-watcher-hk', 'skipped', 'no high-confidence Sphinx conf.py marker found'],
+      ['09-fortweb', 'skipped', 'no high-confidence Sphinx conf.py marker found'],
+    ],
+  );
+});
+
 test('detected projects still include a source mirror latest.json target for artifact watching', () => {
   const project = detectProjectFromSnapshot(
     { name: '02-keripy', fsPath: '/workspace/keripy' },
@@ -783,6 +868,28 @@ test('detected projects still include a source mirror latest.json target for art
     ),
     true,
   );
+});
+
+test('candidate repos with conf.py markers stay passive until docs Python exists', async () => {
+  const runnerPath = '/workspace/notes/Devtools/sphinx/run_sphinx_inventory.sh';
+
+  for (const [project, sourceRoot, docsMarker] of [
+    [hioProject, '/workspace/notes/libs/hio', '/workspace/notes/libs/hio/docs/Makefile'],
+    [locksmithProject, '/workspace/notes/libs/locksmith', '/workspace/notes/libs/locksmith/docs/conf.py'],
+    [witnessProject, '/workspace/notes/libs/witness-hk', '/workspace/notes/libs/witness-hk/docs/conf.py'],
+  ] as const) {
+    const resolution = await inferProjectRefreshConfig({
+      project,
+      workspaceFolders: [
+        { name: '01-keri-notes', fsPath: '/workspace/notes' },
+        { name: project.sourceWorkspaceFolder, fsPath: sourceRoot },
+      ],
+      pathExists: async (filePath) => new Set([runnerPath, docsMarker]).has(filePath),
+    });
+
+    assert.equal(resolution.config, undefined, project.id);
+    assert.match(resolution.reason ?? '', /Docs Python is missing/i, project.id);
+  }
 });
 
 test('extension manifest declares the stable sphinxDoctor settings surface', async () => {
@@ -896,8 +1003,8 @@ test('mergeProjects keeps explicit projects and suppresses discovered duplicates
         id: 'hio',
         sourceWorkspaceFolder: '03-hio',
         inventoryWorkspaceFolder: '01-keri-notes',
-        discoveryConfidence: 'medium',
-        discoveryReasons: ['medium-confidence marker: docs/Makefile'],
+        discoveryConfidence: 'high',
+        discoveryReasons: ['high-confidence marker: docs/source/conf.py'],
         origin: 'discovered',
       },
     ],
