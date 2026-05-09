@@ -1,0 +1,165 @@
+{
+  "schema": "sphinx-diagnostics-v1",
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-08T18:28:30Z",
+  "tool": {
+    "name": "sphinx-doctor-enricher",
+    "version": "0.1.0"
+  },
+  "workspace": {
+    "sourceWorkspaceFolder": "02-keripy",
+    "inventoryWorkspaceFolder": "01-keri-notes",
+    "repoRoot": ".",
+    "docsRoot": "docs",
+    "mirrorRoot": ".sphinx-diagnostics"
+  },
+  "run": {
+    "id": "20260508-182800",
+    "source": "external-inventory",
+    "inventoryFile": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800/report/issues.json",
+    "inventoryDir": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800"
+  },
+  "summary": {
+    "total": 3,
+    "bySeverity": {
+      "error": 2,
+      "warning": 1
+    },
+    "byCategory": {
+      "unexpected-indentation": 3
+    },
+    "mappedCount": 2,
+    "unmappedCount": 1,
+    "publishedDiagnostics": 2,
+    "retainedOnly": 1
+  },
+  "issues": [
+    {
+      "id": "keripy-coring-number-unexpected-indentation-1",
+      "severity": "error",
+      "category": "unexpected-indentation",
+      "code": "docutils.unexpected-indentation",
+      "message": "Unexpected indentation in autodoc docstring block.",
+      "raw": {
+        "source_file": "src/keri/core/coring.py",
+        "object_name": "keri.core.coring.Number",
+        "object_kind": "class",
+        "docstring_line": 6,
+        "raw_location": "src/keri/core/coring.py:keri.core.coring.Number:docstring:6"
+      },
+      "objectName": "keri.core.coring.Number",
+      "objectKind": "class",
+      "docstringLine": 6,
+      "sourceWorkspaceFolder": "02-keripy",
+      "inventoryWorkspaceFolder": "01-keri-notes",
+      "repoRelativePath": "src/keri/core/coring.py",
+      "inventoryRelativePath": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800/report/issues.json",
+      "rawLocation": "src/keri/core/coring.py:keri.core.coring.Number:docstring:6",
+      "sourceRange": {
+        "startLine": 401,
+        "startColumn": 5,
+        "endLine": 401,
+        "endColumn": 29,
+        "anchorKind": "docstring-line"
+      },
+      "mapping": {
+        "confidence": "high",
+        "strategy": "ast-docstring-cleaned-line",
+        "reason": "Fully qualified object resolved and cleaned docstring line mapped into the literal span.",
+        "objectResolved": true,
+        "lineResolved": true
+      },
+      "publishDiagnostic": true,
+      "related": [
+        {
+          "label": "raw inventory issue",
+          "path": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800/report/issues.json"
+        }
+      ]
+    },
+    {
+      "id": "keripy-coring-tholder-unexpected-indentation-1",
+      "severity": "error",
+      "category": "unexpected-indentation",
+      "code": "docutils.unexpected-indentation",
+      "message": "Unexpected indentation in autodoc docstring block.",
+      "raw": {
+        "source_file": "src/keri/core/coring.py",
+        "object_name": "keri.core.coring.Tholder",
+        "object_kind": "class",
+        "docstring_line": 11,
+        "raw_location": "src/keri/core/coring.py:keri.core.coring.Tholder:docstring:11"
+      },
+      "objectName": "keri.core.coring.Tholder",
+      "objectKind": "class",
+      "docstringLine": 11,
+      "sourceWorkspaceFolder": "02-keripy",
+      "inventoryWorkspaceFolder": "01-keri-notes",
+      "repoRelativePath": "src/keri/core/coring.py",
+      "inventoryRelativePath": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800/report/issues.json",
+      "rawLocation": "src/keri/core/coring.py:keri.core.coring.Tholder:docstring:11",
+      "sourceRange": {
+        "startLine": 4339,
+        "startColumn": 5,
+        "endLine": 4349,
+        "endColumn": 8,
+        "anchorKind": "docstring-block"
+      },
+      "mapping": {
+        "confidence": "low",
+        "strategy": "ast-docstring-block-fallback",
+        "reason": "Object resolved, but the cleaned docstring line could not be mapped exactly after normalization; anchored to the containing docstring block.",
+        "objectResolved": true,
+        "lineResolved": false
+      },
+      "publishDiagnostic": true,
+      "related": [
+        {
+          "label": "raw inventory issue",
+          "path": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800/report/issues.json"
+        }
+      ]
+    },
+    {
+      "id": "keripy-coring-missingthing-unexpected-indentation-1",
+      "severity": "warning",
+      "category": "unexpected-indentation",
+      "code": "docutils.unexpected-indentation",
+      "message": "Unexpected indentation, object path could not be resolved from the inventory.",
+      "raw": {
+        "source_file": "src/keri/core/coring.py",
+        "object_name": "keri.core.coring.MissingThing",
+        "object_kind": "class",
+        "docstring_line": 3,
+        "raw_location": "src/keri/core/coring.py:keri.core.coring.MissingThing:docstring:3"
+      },
+      "objectName": "keri.core.coring.MissingThing",
+      "objectKind": "class",
+      "docstringLine": 3,
+      "sourceWorkspaceFolder": "02-keripy",
+      "inventoryWorkspaceFolder": "01-keri-notes",
+      "repoRelativePath": "src/keri/core/coring.py",
+      "inventoryRelativePath": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800/report/issues.json",
+      "rawLocation": "src/keri/core/coring.py:keri.core.coring.MissingThing:docstring:3",
+      "sourceRange": null,
+      "mapping": {
+        "confidence": "none",
+        "strategy": "inventory-retention-only",
+        "reason": "The source file matched, but the object name could not be resolved to a real host; retained in reports without a published diagnostic.",
+        "objectResolved": false,
+        "lineResolved": false
+      },
+      "publishDiagnostic": false,
+      "related": [
+        {
+          "label": "raw inventory issue",
+          "path": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800/report/issues.json"
+        },
+        {
+          "label": "mirror target",
+          "path": ".sphinx-diagnostics/latest.json"
+        }
+      ]
+    }
+  ]
+}

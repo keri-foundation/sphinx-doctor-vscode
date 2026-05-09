@@ -1,0 +1,50 @@
+{
+  "schema": "sphinx-inventory-sample-v1",
+  "generatedAt": "2026-05-08T18:28:00Z",
+  "workspace": {
+    "sourceWorkspaceFolder": "02-keripy",
+    "inventoryWorkspaceFolder": "01-keri-notes",
+    "repoRoot": ".",
+    "docsRoot": "docs"
+  },
+  "run": {
+    "id": "20260508-182800",
+    "inventoryDir": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800",
+    "inventoryFile": "tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-20260508-182800/report/issues.json"
+  },
+  "issues": [
+    {
+      "severity": "error",
+      "category": "unexpected-indentation",
+      "code": "docutils.unexpected-indentation",
+      "message": "Unexpected indentation in autodoc docstring block.",
+      "source_file": "src/keri/core/coring.py",
+      "object_name": "keri.core.coring.Number",
+      "object_kind": "class",
+      "docstring_line": 6,
+      "raw_location": "src/keri/core/coring.py:keri.core.coring.Number:docstring:6"
+    },
+    {
+      "severity": "error",
+      "category": "unexpected-indentation",
+      "code": "docutils.unexpected-indentation",
+      "message": "Unexpected indentation in autodoc docstring block.",
+      "source_file": "src/keri/core/coring.py",
+      "object_name": "keri.core.coring.Tholder",
+      "object_kind": "class",
+      "docstring_line": 11,
+      "raw_location": "src/keri/core/coring.py:keri.core.coring.Tholder:docstring:11"
+    },
+    {
+      "severity": "warning",
+      "category": "unexpected-indentation",
+      "code": "docutils.unexpected-indentation",
+      "message": "Unexpected indentation, object path could not be resolved from the inventory.",
+      "source_file": "src/keri/core/coring.py",
+      "object_name": "keri.core.coring.MissingThing",
+      "object_kind": "class",
+      "docstring_line": 3,
+      "raw_location": "src/keri/core/coring.py:keri.core.coring.MissingThing:docstring:3"
+    }
+  ]
+}

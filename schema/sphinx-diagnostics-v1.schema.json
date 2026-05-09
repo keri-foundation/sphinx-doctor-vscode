@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sphinx-doctor.local/schema/sphinx-diagnostics-v1.schema.json",
+  "title": "Sphinx Doctor Enriched Diagnostics Contract",
+  "description": "Canonical enriched diagnostics contract for Sphinx Doctor mirrors and fixtures.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "schemaVersion",
+    "generatedAt",
+    "tool",
+    "workspace",
+    "run",
+    "summary",
+    "issues"
+  ],
+  "properties": {
+    "schema": {
+      "const": "sphinx-diagnostics-v1"
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "tool": {
+      "$ref": "#/$defs/tool"
+    },
+    "workspace": {
+      "$ref": "#/$defs/workspace"
+    },
+    "run": {
+      "$ref": "#/$defs/run"
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/issue"
+      }
+    }
+  },
+  "$defs": {
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceWorkspaceFolder",
+        "inventoryWorkspaceFolder",
+        "repoRoot",
+        "docsRoot",
+        "mirrorRoot"
+      ],
+      "properties": {
+        "sourceWorkspaceFolder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inventoryWorkspaceFolder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repoRoot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "docsRoot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mirrorRoot": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source",
+        "inventoryFile",
+        "inventoryDir"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inventoryFile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inventoryDir": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total",
+        "bySeverity",
+        "byCategory",
+        "mappedCount",
+        "unmappedCount",
+        "publishedDiagnostics",
+        "retainedOnly"
+      ],
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bySeverity": {
+          "$ref": "#/$defs/stringIntegerMap"
+        },
+        "byCategory": {
+          "$ref": "#/$defs/stringIntegerMap"
+        },
+        "mappedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unmappedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "publishedDiagnostics": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retainedOnly": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "severity",
+        "category",
+        "code",
+        "message",
+        "raw",
+        "sourceWorkspaceFolder",
+        "inventoryWorkspaceFolder",
+        "repoRelativePath",
+        "inventoryRelativePath",
+        "rawLocation",
+        "mapping",
+        "publishDiagnostic",
+        "related"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "error",
+            "warning",
+            "information",
+            "hint"
+          ]
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "raw": {
+          "type": "object"
+        },
+        "objectName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "objectKind": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "docstringLine": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "sourceWorkspaceFolder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inventoryWorkspaceFolder": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repoRelativePath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "inventoryRelativePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rawLocation": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceRange": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sourceRange"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mapping": {
+          "$ref": "#/$defs/mapping"
+        },
+        "publishDiagnostic": {
+          "type": "boolean"
+        },
+        "related": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/related"
+          }
+        }
+      }
+    },
+    "sourceRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startLine",
+        "startColumn",
+        "endLine",
+        "endColumn",
+        "anchorKind"
+      ],
+      "properties": {
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "startColumn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endColumn": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "anchorKind": {
+          "type": "string",
+          "enum": [
+            "docstring-line",
+            "docstring-block",
+            "object-block",
+            "file-line",
+            "file-top"
+          ]
+        }
+      }
+    },
+    "mapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "confidence",
+        "strategy",
+        "reason",
+        "objectResolved",
+        "lineResolved"
+      ],
+      "properties": {
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            "none"
+          ]
+        },
+        "strategy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "objectResolved": {
+          "type": "boolean"
+        },
+        "lineResolved": {
+          "type": "boolean"
+        }
+      }
+    },
+    "related": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "path"
+      ],
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "stringIntegerMap": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    }
+  }
+}
