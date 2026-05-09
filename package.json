@@ -197,6 +197,16 @@
           "default": "",
           "description": "Workspace folder name used to resolve repo-relative diagnostic paths."
         },
+        "sphinxDoctor.diagnostics.mode": {
+          "type": "string",
+          "enum": [
+            "layout",
+            "reference",
+            "full"
+          ],
+          "default": "layout",
+          "description": "Controls which Sphinx Doctor diagnostics are published by default. Layout shows formatting issues, reference shows cross-reference issues, and full shows the entire audit."
+        },
         "sphinxDoctor.python.interpreter": {
           "type": "string",
           "default": "python3",

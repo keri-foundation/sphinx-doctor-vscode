@@ -3,8 +3,10 @@ import * as vscode from 'vscode';
 import { SphinxDoctorLogger } from './log';
 import {
   buildDiagnosticMessage,
+  DiagnosticMode,
   DiagnosticsContract,
   DiagnosticsIssue,
+  issueMatchesDiagnosticMode,
   normalizeSeverityName,
   shouldPublishIssue,
   toZeroBasedPosition,
@@ -14,6 +16,7 @@ import { resolveIssueFilePath } from './workspace';
 
 export interface PublishOptions {
   workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
+  diagnosticMode: DiagnosticMode;
   defaultSourceWorkspaceFolder?: string;
   defaultRepoRoot?: string;
   fixtureSourceRoot?: string;
@@ -23,7 +26,9 @@ export interface PublishOptions {
 
 export interface PublishResult {
   issueCount: number;
+  publishableBeforeFilter: number;
   publishedDiagnostics: number;
+  filteredByMode: number;
   targetUriCount: number;
   skippedIssues: number;
   resolutionFailures: number;
@@ -83,13 +88,23 @@ function collectDiagnostics(
 ): CollectedDiagnostics {
   const grouped = new Map<string, { uri: vscode.Uri; diagnostics: vscode.Diagnostic[] }>();
   const workspaceFolders = toWorkspaceFolderInfo(options.workspaceFolders);
+  let publishableBeforeFilter = 0;
   let publishedDiagnostics = 0;
+  let filteredByMode = 0;
   let skippedIssues = 0;
   let resolutionFailures = 0;
 
   for (const issue of contract.issues) {
     if (!shouldPublishIssue(issue)) {
       skippedIssues += 1;
+      continue;
+    }
+
+    publishableBeforeFilter += 1;
+
+    if (!issueMatchesDiagnosticMode(issue, options.diagnosticMode)) {
+      skippedIssues += 1;
+      filteredByMode += 1;
       continue;
     }
 
@@ -139,7 +154,9 @@ function collectDiagnostics(
     grouped,
     result: {
       issueCount: contract.issues.length,
+      publishableBeforeFilter,
       publishedDiagnostics,
+      filteredByMode,
       targetUriCount: grouped.size,
       skippedIssues,
       resolutionFailures,
@@ -150,11 +167,13 @@ function collectDiagnostics(
 export function publishDiagnosticsBatch(
   collection: vscode.DiagnosticCollection,
   entries: PublishBatchEntry[],
-  options: Pick<PublishOptions, 'workspaceFolders' | 'logger'>,
+  options: Pick<PublishOptions, 'workspaceFolders' | 'diagnosticMode' | 'logger'>,
 ): PublishResult {
   const grouped = new Map<string, { uri: vscode.Uri; diagnostics: vscode.Diagnostic[] }>();
   let issueCount = 0;
+  let publishableBeforeFilter = 0;
   let publishedDiagnostics = 0;
+  let filteredByMode = 0;
   let targetUriCount = 0;
   let skippedIssues = 0;
   let resolutionFailures = 0;
@@ -164,6 +183,7 @@ export function publishDiagnosticsBatch(
   for (const entry of entries) {
     const collected = collectDiagnostics(entry.contract, {
       workspaceFolders: options.workspaceFolders,
+      diagnosticMode: options.diagnosticMode,
       defaultSourceWorkspaceFolder: entry.defaultSourceWorkspaceFolder,
       defaultRepoRoot: entry.defaultRepoRoot,
       fixtureSourceRoot: entry.fixtureSourceRoot,
@@ -172,7 +192,9 @@ export function publishDiagnosticsBatch(
     });
 
     issueCount += collected.result.issueCount;
+  publishableBeforeFilter += collected.result.publishableBeforeFilter;
     publishedDiagnostics += collected.result.publishedDiagnostics;
+  filteredByMode += collected.result.filteredByMode;
     targetUriCount += collected.result.targetUriCount;
     skippedIssues += collected.result.skippedIssues;
     resolutionFailures += collected.result.resolutionFailures;
@@ -193,7 +215,9 @@ export function publishDiagnosticsBatch(
 
   return {
     issueCount,
+    publishableBeforeFilter,
     publishedDiagnostics,
+    filteredByMode,
     targetUriCount,
     skippedIssues,
     resolutionFailures,

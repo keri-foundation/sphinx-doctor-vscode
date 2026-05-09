@@ -1,5 +1,20 @@
 export type SphinxDoctorLogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type DiscoveryConfidence = 'high' | 'medium' | 'low';
+export type DiagnosticMode = 'layout' | 'reference' | 'full';
+
+const LAYOUT_CATEGORIES = new Set([
+  'unexpected-indentation',
+  'block-quote-unindent',
+  'definition-list-unindent',
+  'literal-block',
+]);
+
+const REFERENCE_CATEGORIES = new Set([
+  'missing-reference',
+  'ambiguous-reference',
+]);
+
+const LITERAL_BLOCK_MESSAGE_RE = /literal block expected; none found/i;
 
 export interface DiagnosticsTool {
   name: string;
@@ -57,6 +72,10 @@ export interface DiagnosticsIssue {
   severity: string;
   category: string;
   code: string;
+  target?: string | null;
+  refDomain?: string | null;
+  refType?: string | null;
+  candidates?: string[] | null;
   message: string;
   raw: unknown;
   objectName?: string | null;
@@ -115,6 +134,7 @@ export interface ProjectRefreshConfig {
 export interface ExtensionConfig {
   projects: ConfiguredProject[];
   defaultSourceWorkspaceFolder: string;
+  diagnosticsMode: DiagnosticMode;
   pythonInterpreter: string;
   enrichmentEnabled: boolean;
   enrichmentAutoRun: boolean;
@@ -134,9 +154,18 @@ export interface WatchModeSummary {
   state: 'idle' | 'watching' | 'no-diagnostics' | 'error';
   projectCount: number;
   issueCount: number;
+  publishableBeforeFilter: number;
   publishedDiagnostics: number;
   watcherCount: number;
+  diagnosticMode: DiagnosticMode;
   message: string;
+}
+
+export interface DiagnosticModeSummary {
+  totalIssues: number;
+  publishableBeforeFilter: number;
+  publishedInMode: number;
+  retainedOnly: number;
 }
 
 export interface WorkspaceFolderInfo {
@@ -192,8 +221,62 @@ export function toZeroBasedPosition(value: number | null | undefined): number {
   return value <= 1 ? 0 : value - 1;
 }
 
+export function normalizeDiagnosticMode(value: unknown): DiagnosticMode {
+  if (value === 'layout' || value === 'reference' || value === 'full') {
+    return value;
+  }
+
+  return 'layout';
+}
+
 export function shouldPublishIssue(issue: DiagnosticsIssue): boolean {
   return issue.publishDiagnostic === true && Boolean(issue.sourceRange) && Boolean(issue.repoRelativePath);
+}
+
+export function issueMatchesDiagnosticMode(
+  issue: Pick<DiagnosticsIssue, 'category' | 'code' | 'message'>,
+  mode: DiagnosticMode,
+): boolean {
+  if (mode === 'full') {
+    return true;
+  }
+
+  if (mode === 'reference') {
+    return REFERENCE_CATEGORIES.has(issue.category) || issue.code.startsWith('ref.');
+  }
+
+  return (
+    LAYOUT_CATEGORIES.has(issue.category) ||
+    LAYOUT_CATEGORIES.has(issue.code) ||
+    issue.code.endsWith('unexpected-indentation') ||
+    LITERAL_BLOCK_MESSAGE_RE.test(issue.message)
+  );
+}
+
+export function summarizeDiagnosticMode(
+  issues: readonly DiagnosticsIssue[],
+  mode: DiagnosticMode,
+): DiagnosticModeSummary {
+  let publishableBeforeFilter = 0;
+  let publishedInMode = 0;
+
+  for (const issue of issues) {
+    if (!shouldPublishIssue(issue)) {
+      continue;
+    }
+
+    publishableBeforeFilter += 1;
+    if (issueMatchesDiagnosticMode(issue, mode)) {
+      publishedInMode += 1;
+    }
+  }
+
+  return {
+    totalIssues: issues.length,
+    publishableBeforeFilter,
+    publishedInMode,
+    retainedOnly: issues.length - publishableBeforeFilter,
+  };
 }
 
 export function buildDiagnosticMessage(issue: DiagnosticsIssue): string {

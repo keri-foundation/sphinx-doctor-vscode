@@ -226,8 +226,6 @@ export async function inferProjectRefreshConfig(
         toPosixPath(relativeRepoRoot),
         '--python',
         relativePythonPath,
-        '--category',
-        'unexpected-indentation',
         '--context-lines',
         '16',
       ],

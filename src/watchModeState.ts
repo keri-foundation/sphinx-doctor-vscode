@@ -3,6 +3,7 @@ import path from 'node:path';
 import { getEnrichmentPermission } from './enrichmentRunner';
 import {
   ConfiguredProject,
+  DiagnosticMode,
   ExtensionConfig,
   WatchModeSummary,
   WorkspaceFolderInfo,
@@ -40,10 +41,12 @@ interface RefreshStats {
   projectCount: number;
   loadedProjectCount: number;
   issueCount: number;
+  publishableBeforeFilter: number;
   publishedDiagnostics: number;
   watcherCount: number;
   rawPendingCount: number;
   errorCount: number;
+  diagnosticMode: DiagnosticMode;
   message?: string;
 }
 
@@ -219,8 +222,10 @@ export function buildWatchModeSummary(stats: RefreshStats): WatchModeSummary {
       state: 'error',
       projectCount: stats.projectCount,
       issueCount: stats.issueCount,
+      publishableBeforeFilter: stats.publishableBeforeFilter,
       publishedDiagnostics: stats.publishedDiagnostics,
       watcherCount: stats.watcherCount,
+      diagnosticMode: stats.diagnosticMode,
       message: stats.message ?? 'Sphinx Doctor watch mode hit an error. Check the output channel.',
     };
   }
@@ -230,11 +235,13 @@ export function buildWatchModeSummary(stats: RefreshStats): WatchModeSummary {
       state: 'watching',
       projectCount: stats.projectCount,
       issueCount: stats.issueCount,
+      publishableBeforeFilter: stats.publishableBeforeFilter,
       publishedDiagnostics: stats.publishedDiagnostics,
       watcherCount: stats.watcherCount,
+      diagnosticMode: stats.diagnosticMode,
       message:
         stats.message ??
-        `Watching ${stats.projectCount} projects with ${stats.issueCount} issues and ${stats.publishedDiagnostics} published diagnostics.`,
+        `Watching ${stats.projectCount} projects in ${stats.diagnosticMode} mode with ${stats.issueCount} issues, ${stats.publishableBeforeFilter} publishable before filter, and ${stats.publishedDiagnostics} published diagnostics.`,
     };
   }
 
@@ -243,8 +250,10 @@ export function buildWatchModeSummary(stats: RefreshStats): WatchModeSummary {
       state: 'idle',
       projectCount: 0,
       issueCount: 0,
+      publishableBeforeFilter: 0,
       publishedDiagnostics: 0,
       watcherCount: stats.watcherCount,
+      diagnosticMode: stats.diagnosticMode,
       message: stats.message ?? 'No configured or discoverable Sphinx projects in the current workspace.',
     };
   }
@@ -253,8 +262,10 @@ export function buildWatchModeSummary(stats: RefreshStats): WatchModeSummary {
     state: 'no-diagnostics',
     projectCount: stats.projectCount,
     issueCount: 0,
+    publishableBeforeFilter: stats.publishableBeforeFilter,
     publishedDiagnostics: 0,
     watcherCount: stats.watcherCount,
+    diagnosticMode: stats.diagnosticMode,
     message:
       stats.message ??
       (stats.rawPendingCount > 0
@@ -279,7 +290,9 @@ export function formatWatchModeText(summary: WatchModeSummary): string {
 export function formatWatchModeTooltip(summary: WatchModeSummary): string {
   return [
     summary.message,
+    `Mode: ${summary.diagnosticMode}`,
     `Projects: ${summary.projectCount}`,
+    `Publishable before filter: ${summary.publishableBeforeFilter}`,
     `Published diagnostics: ${summary.publishedDiagnostics}`,
     `Watchers: ${summary.watcherCount}`,
   ].join('\n');

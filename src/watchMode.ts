@@ -28,7 +28,7 @@ import { SELF_TEST_STATUS_TEXT } from './selfTest';
 import {
   ConfiguredProject,
   ExtensionConfig,
-  shouldPublishIssue,
+  summarizeDiagnosticMode,
   WorkspaceFolderInfo,
 } from './types';
 import { WatchModeSummary } from './types';
@@ -187,7 +187,11 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
   private lastIssueCount = 0;
 
+  private lastPublishableBeforeFilterCount = 0;
+
   private lastPublishedCount = 0;
+
+  private lastFilteredByModeCount = 0;
 
   private lastSkippedCount = 0;
 
@@ -199,10 +203,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     projectCount: 0,
     loadedProjectCount: 0,
     issueCount: 0,
+    publishableBeforeFilter: 0,
     publishedDiagnostics: 0,
     watcherCount: 0,
     rawPendingCount: 0,
     errorCount: 0,
+    diagnosticMode: 'layout',
     message: 'Sphinx Doctor is idle.',
   });
 
@@ -237,7 +243,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     const config = getExtensionConfig();
     this.logger.setLevel(config.logLevel);
     this.logger.info(
-      `Watch mode startup: enabled=${config.watchEnabled}, autoLoadOnStartup=${config.watchAutoLoadOnStartup}, autoRun=${config.enrichmentAutoRun}, trusted=${vscode.workspace.isTrusted === true}.`,
+      `Watch mode startup: enabled=${config.watchEnabled}, autoLoadOnStartup=${config.watchAutoLoadOnStartup}, mode=${config.diagnosticsMode}, autoRun=${config.enrichmentAutoRun}, trusted=${vscode.workspace.isTrusted === true}.`,
     );
     this.resetRefreshTrigger(config.watchDebounceMs);
     await runWatchModeStartup({
@@ -256,10 +262,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
           projectCount: 0,
           loadedProjectCount: 0,
           issueCount: 0,
+          publishableBeforeFilter: 0,
           publishedDiagnostics: 0,
           watcherCount: 0,
           rawPendingCount: 0,
           errorCount: 0,
+          diagnosticMode: config.diagnosticsMode,
           message: 'Sphinx Doctor watch mode is disabled by settings.',
         }),
       );
@@ -277,7 +285,9 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       this.lastError = undefined;
       this.lastLoadedDiagnosticsFiles = [];
       this.lastIssueCount = 0;
+      this.lastPublishableBeforeFilterCount = 0;
       this.lastPublishedCount = 0;
+      this.lastFilteredByModeCount = 0;
       this.lastSkippedCount = 0;
       this.lastResolutionFailureCount = 0;
       this.lastProjectStatuses.clear();
@@ -286,10 +296,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
           projectCount: 0,
           loadedProjectCount: 0,
           issueCount: 0,
+          publishableBeforeFilter: 0,
           publishedDiagnostics: 0,
           watcherCount: 0,
           rawPendingCount: 0,
           errorCount: 0,
+          diagnosticMode: config.diagnosticsMode,
           message: 'Sphinx Doctor watch mode is disabled by settings.',
         }),
       );
@@ -327,10 +339,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         projectCount: 0,
         loadedProjectCount: 0,
         issueCount: 0,
+        publishableBeforeFilter: 0,
         publishedDiagnostics: 0,
         watcherCount: 0,
         rawPendingCount: 0,
         errorCount: 0,
+        diagnosticMode: config.diagnosticsMode,
         message: 'No workspace folders are open, so Sphinx Doctor watch mode is idle.',
       });
       this.logger.info(`Watch refresh skipped (${reason}): no workspace folders.`);
@@ -400,10 +414,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
           projectCount: projects.length,
           loadedProjectCount: 0,
           issueCount: 0,
+          publishableBeforeFilter: 0,
           publishedDiagnostics: 0,
           watcherCount: this.watchers.size,
           rawPendingCount: 0,
           errorCount: 0,
+          diagnosticMode: config.diagnosticsMode,
           message:
             projects.length > 0
               ? `Watching ${projects.length} projects for diagnostics changes.`
@@ -424,7 +440,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
           entries.push(prepared);
           this.setProjectStatus(
             project.id,
-            `loaded ${prepared.loadedPath} with ${prepared.loadedIssueCount} issues and ${prepared.publishableIssueCount} publishable diagnostics.`,
+            `loaded ${prepared.loadedPath} with ${prepared.loadedIssueCount} issues and ${prepared.publishableIssueCount} publishable diagnostics before mode filter.`,
           );
         } else {
           const mirrorRelativePath = buildMirrorLatestRelativePath(project);
@@ -459,7 +475,9 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
     let publishResult: PublishResult = {
       issueCount: 0,
+      publishableBeforeFilter: 0,
       publishedDiagnostics: 0,
+      filteredByMode: 0,
       targetUriCount: 0,
       skippedIssues: 0,
       resolutionFailures: 0,
@@ -468,6 +486,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     if (entries.length > 0) {
       publishResult = publishDiagnosticsBatch(this.collection, entries, {
         workspaceFolders: vscode.workspace.workspaceFolders,
+        diagnosticMode: config.diagnosticsMode,
         logger: this.logger,
       });
     } else {
@@ -476,7 +495,9 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
     this.lastLoadedDiagnosticsFiles = entries.map((entry) => entry.loadedPath);
     this.lastIssueCount = publishResult.issueCount;
+  this.lastPublishableBeforeFilterCount = publishResult.publishableBeforeFilter;
     this.lastPublishedCount = publishResult.publishedDiagnostics;
+  this.lastFilteredByModeCount = publishResult.filteredByMode;
     this.lastSkippedCount = publishResult.skippedIssues;
     this.lastResolutionFailureCount = publishResult.resolutionFailures;
 
@@ -492,10 +513,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       projectCount: projects.length,
       loadedProjectCount: entries.length,
       issueCount: publishResult.issueCount,
+      publishableBeforeFilter: publishResult.publishableBeforeFilter,
       publishedDiagnostics: publishResult.publishedDiagnostics,
       watcherCount: this.watchers.size,
       rawPendingCount,
       errorCount,
+      diagnosticMode: config.diagnosticsMode,
       message:
         errorCount > 0
           ? 'Sphinx Doctor watch mode hit an error. Check the output channel.'
@@ -503,7 +526,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     });
     this.applySummary(summary);
     this.logger.info(
-      `Watch refresh completed (${reason}): loaded ${entries.length} files, ${publishResult.issueCount} issues, ${publishResult.publishedDiagnostics} published diagnostics across ${publishResult.targetUriCount} target URIs, ${publishResult.skippedIssues} skipped, ${publishResult.resolutionFailures} resolution failures, ${this.watchers.size} watchers.`,
+      `Watch refresh completed (${reason}): mode=${config.diagnosticsMode}; loaded ${entries.length} files, ${publishResult.issueCount} issues, ${publishResult.publishableBeforeFilter} publishable before filter, ${publishResult.publishedDiagnostics} published diagnostics across ${publishResult.targetUriCount} target URIs, ${publishResult.filteredByMode} filtered by mode, ${publishResult.skippedIssues} skipped, ${publishResult.resolutionFailures} resolution failures, ${this.watchers.size} watchers.`,
     );
   }
 
@@ -517,9 +540,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       `- configured projects: ${this.lastConfiguredProjectIds.join(', ') || 'none'}`,
       `- discovered projects: ${this.lastDiscoveredProjectIds.join(', ') || 'none'}`,
       `- known projects: ${this.lastKnownProjectIds.join(', ') || 'none'}`,
+      `- diagnostic mode: ${this.summary.diagnosticMode}`,
       `- last loaded diagnostics: ${this.lastLoadedDiagnosticsFiles.join(', ') || 'none'}`,
       `- last issue count: ${this.lastIssueCount}`,
+      `- last publishable-before-filter count: ${this.lastPublishableBeforeFilterCount}`,
       `- last published count: ${this.lastPublishedCount}`,
+      `- last filtered-by-mode count: ${this.lastFilteredByModeCount}`,
       `- last skipped count: ${this.lastSkippedCount}`,
       `- last URI resolution failures: ${this.lastResolutionFailureCount}`,
       `- last error: ${this.lastError ?? 'none'}`,
@@ -542,10 +568,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         projectCount: this.summary.projectCount,
         loadedProjectCount: 0,
         issueCount: 0,
+        publishableBeforeFilter: 0,
         publishedDiagnostics: 0,
         watcherCount: this.watchers.size,
         rawPendingCount: 0,
         errorCount: 0,
+        diagnosticMode: this.summary.diagnosticMode,
         message: 'Sphinx Doctor diagnostics cleared.',
       }),
     );
@@ -567,7 +595,9 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
   public noteManualDiagnosticsPublished(options: {
     filePath: string;
     issueCount: number;
+    publishableBeforeFilter: number;
     publishedDiagnostics: number;
+    filteredByMode: number;
     skippedIssues: number;
     resolutionFailures: number;
     message: string;
@@ -576,7 +606,9 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     this.lastError = undefined;
     this.lastLoadedDiagnosticsFiles = [options.filePath];
     this.lastIssueCount = options.issueCount;
+    this.lastPublishableBeforeFilterCount = options.publishableBeforeFilter;
     this.lastPublishedCount = options.publishedDiagnostics;
+    this.lastFilteredByModeCount = options.filteredByMode;
     this.lastSkippedCount = options.skippedIssues;
     this.lastResolutionFailureCount = options.resolutionFailures;
     this.applySummary(
@@ -584,10 +616,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         projectCount: Math.max(this.summary.projectCount, 1),
         loadedProjectCount: 1,
         issueCount: options.issueCount,
+        publishableBeforeFilter: options.publishableBeforeFilter,
         publishedDiagnostics: options.publishedDiagnostics,
         watcherCount: this.watchers.size,
         rawPendingCount: 0,
         errorCount: 0,
+        diagnosticMode: this.summary.diagnosticMode,
         message: options.message,
       }),
     );
@@ -640,9 +674,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
     if (selected.kind === 'enriched') {
       const contract = await loadDiagnosticsFromPath(selected.candidate.filePath);
-      const publishableIssueCount = contract.issues.filter((issue) => shouldPublishIssue(issue)).length;
+      const publishableIssueCount = summarizeDiagnosticMode(
+        contract.issues,
+        config.diagnosticsMode,
+      ).publishableBeforeFilter;
       this.logger.info(
-        `Watch mode loaded enriched diagnostics for ${project.id}: ${selected.candidate.filePath}; issues=${contract.issues.length}; publishable=${publishableIssueCount}.`,
+        `Watch mode loaded enriched diagnostics for ${project.id}: ${selected.candidate.filePath}; issues=${contract.issues.length}; publishableBeforeFilter=${publishableIssueCount}; mode=${config.diagnosticsMode}.`,
       );
       return {
         project,
@@ -685,9 +722,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       );
       const result = await runEnrichmentPlan(plan);
       const contract = await loadDiagnosticsFromPath(result.plan.latestOutputPath);
-      const publishableIssueCount = contract.issues.filter((issue) => shouldPublishIssue(issue)).length;
+      const publishableIssueCount = summarizeDiagnosticMode(
+        contract.issues,
+        config.diagnosticsMode,
+      ).publishableBeforeFilter;
       this.logger.info(
-        `Watch mode auto-enriched ${project.id} to ${result.plan.latestOutputPath}; issues=${contract.issues.length}; publishable=${publishableIssueCount}.`,
+        `Watch mode auto-enriched ${project.id} to ${result.plan.latestOutputPath}; issues=${contract.issues.length}; publishableBeforeFilter=${publishableIssueCount}; mode=${config.diagnosticsMode}.`,
       );
       return {
         project,

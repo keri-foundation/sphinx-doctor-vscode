@@ -19,8 +19,11 @@ import {
   ConfiguredProject,
   DiagnosticsContract,
   DiagnosticsIssue,
+  issueMatchesDiagnosticMode,
+  normalizeDiagnosticMode,
   normalizeSeverityName,
   shouldPublishIssue,
+  summarizeDiagnosticMode,
   toZeroBasedPosition,
 } from '../src/types';
 import {
@@ -205,8 +208,6 @@ const configuredRefresh = {
     'libs/keripy',
     '--python',
     'libs/keripy/.venv-docs/bin/python',
-    '--category',
-    'unexpected-indentation',
     '--context-lines',
     '16',
   ],
@@ -259,6 +260,14 @@ test('normalizeSeverityName collapses non-error severities for the extension', (
   assert.equal(normalizeSeverityName('hint'), 'info');
 });
 
+test('normalizeDiagnosticMode defaults to layout and accepts valid explicit modes', () => {
+  assert.equal(normalizeDiagnosticMode('layout'), 'layout');
+  assert.equal(normalizeDiagnosticMode('reference'), 'reference');
+  assert.equal(normalizeDiagnosticMode('full'), 'full');
+  assert.equal(normalizeDiagnosticMode('bogus'), 'layout');
+  assert.equal(normalizeDiagnosticMode(undefined), 'layout');
+});
+
 test('toZeroBasedPosition converts one-based coordinates to zero-based indices', () => {
   assert.equal(toZeroBasedPosition(1), 0);
   assert.equal(toZeroBasedPosition(13), 12);
@@ -270,6 +279,72 @@ test('shouldPublishIssue requires publish flag, path, and source range', () => {
   assert.equal(shouldPublishIssue({ ...mappedIssue, publishDiagnostic: false }), false);
   assert.equal(shouldPublishIssue({ ...mappedIssue, sourceRange: null }), false);
   assert.equal(shouldPublishIssue({ ...mappedIssue, repoRelativePath: null }), false);
+});
+
+test('diagnostic modes distinguish layout, reference, and full warning classes', () => {
+  const referenceIssue: DiagnosticsIssue = {
+    ...mappedIssue,
+    category: 'missing-reference',
+    code: 'ref.class',
+    message: 'py:class reference target not found: socket.socket [ref.class]',
+  };
+  const ambiguousIssue: DiagnosticsIssue = {
+    ...mappedIssue,
+    category: 'ambiguous-reference',
+    code: 'ref.python',
+    message: "more than one target found for cross-reference 'host': demo.one, demo.two [ref.python]",
+  };
+  const literalBlockIssue: DiagnosticsIssue = {
+    ...mappedIssue,
+    category: 'other',
+    code: 'other',
+    message: 'Literal block expected; none found. [docutils]',
+  };
+
+  assert.equal(issueMatchesDiagnosticMode(mappedIssue, 'layout'), true);
+  assert.equal(issueMatchesDiagnosticMode(referenceIssue, 'layout'), false);
+  assert.equal(issueMatchesDiagnosticMode(referenceIssue, 'reference'), true);
+  assert.equal(issueMatchesDiagnosticMode(ambiguousIssue, 'reference'), true);
+  assert.equal(issueMatchesDiagnosticMode(literalBlockIssue, 'layout'), true);
+  assert.equal(issueMatchesDiagnosticMode(referenceIssue, 'full'), true);
+});
+
+test('mode summaries change published counts without deleting retained issues', () => {
+  const referenceIssue: DiagnosticsIssue = {
+    ...mappedIssue,
+    id: 'reference-issue',
+    category: 'missing-reference',
+    code: 'ref.class',
+    message: 'py:class reference target not found: io.IOBase [ref.class]',
+  };
+  const retainedOnlyIssue: DiagnosticsIssue = {
+    ...mappedIssue,
+    id: 'retained-only-issue',
+    category: 'ambiguous-reference',
+    code: 'ref.python',
+    message: "more than one target found for cross-reference 'port': demo.one, demo.two [ref.python]",
+    publishDiagnostic: false,
+    sourceRange: null,
+  };
+
+  assert.deepEqual(summarizeDiagnosticMode([mappedIssue, referenceIssue, retainedOnlyIssue], 'layout'), {
+    totalIssues: 3,
+    publishableBeforeFilter: 2,
+    publishedInMode: 1,
+    retainedOnly: 1,
+  });
+  assert.deepEqual(summarizeDiagnosticMode([mappedIssue, referenceIssue, retainedOnlyIssue], 'reference'), {
+    totalIssues: 3,
+    publishableBeforeFilter: 2,
+    publishedInMode: 1,
+    retainedOnly: 1,
+  });
+  assert.deepEqual(summarizeDiagnosticMode([mappedIssue, referenceIssue, retainedOnlyIssue], 'full'), {
+    totalIssues: 3,
+    publishableBeforeFilter: 2,
+    publishedInMode: 2,
+    retainedOnly: 1,
+  });
 });
 
 test('buildDiagnosticMessage includes category, object name, and low-confidence marker', () => {
@@ -926,6 +1001,7 @@ test('extension manifest declares the stable sphinxDoctor settings surface', asy
   const properties = manifest.contributes?.configuration?.properties ?? {};
   for (const key of [
     'sphinxDoctor.projects',
+    'sphinxDoctor.diagnostics.mode',
     'sphinxDoctor.python.interpreter',
     'sphinxDoctor.enrichment.enabled',
     'sphinxDoctor.enrichment.autoRun',
@@ -1259,10 +1335,12 @@ test('formatWatchModeText shows issue counts for active diagnostics', () => {
     projectCount: 2,
     loadedProjectCount: 1,
     issueCount: 30,
+    publishableBeforeFilter: 18,
     publishedDiagnostics: 18,
     watcherCount: 4,
     rawPendingCount: 0,
     errorCount: 0,
+    diagnosticMode: 'layout',
   });
 
   assert.equal(formatWatchModeText(summary), 'Sphinx Doctor: 30 issues');
@@ -1273,13 +1351,17 @@ test('buildWatchModeSummary reports no diagnostics when projects are loaded but 
     projectCount: 1,
     loadedProjectCount: 0,
     issueCount: 0,
+    publishableBeforeFilter: 0,
     publishedDiagnostics: 0,
     watcherCount: 2,
     rawPendingCount: 0,
     errorCount: 0,
+    diagnosticMode: 'reference',
   });
 
   assert.equal(summary.state, 'no-diagnostics');
+  assert.equal(summary.diagnosticMode, 'reference');
+  assert.equal(summary.publishableBeforeFilter, 0);
   assert.equal(summary.publishedDiagnostics, 0);
 });
 

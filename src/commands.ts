@@ -142,6 +142,7 @@ async function loadAndPublish(
 
   const result = publishDiagnostics(dependencies.collection, contract, {
     workspaceFolders: vscode.workspace.workspaceFolders,
+    diagnosticMode: config.diagnosticsMode,
     defaultSourceWorkspaceFolder:
       options.defaultSourceWorkspaceFolderOverride ?? config.defaultSourceWorkspaceFolder,
     defaultRepoRoot: options.defaultRepoRootOverride,
@@ -157,16 +158,18 @@ async function loadAndPublish(
   });
 
   dependencies.logger.info(
-    `Published ${result.publishedDiagnostics} diagnostics across ${result.targetUriCount} target URIs, skipped ${result.skippedIssues}, resolution failures ${result.resolutionFailures}.`,
+    `Published ${result.publishedDiagnostics} diagnostics in ${config.diagnosticsMode} mode across ${result.targetUriCount} target URIs; ${result.publishableBeforeFilter} were publishable before filter, ${result.filteredByMode} were filtered by mode, ${result.skippedIssues} were skipped, and ${result.resolutionFailures} hit resolution failures.`,
   );
   dependencies.logger.info('Diagnostics collection update completed.');
 
   const statusMessage =
-    `Sphinx Doctor loaded ${result.issueCount} issues and published ${result.publishedDiagnostics} diagnostics.`;
+    `Sphinx Doctor loaded ${result.issueCount} issues; ${result.publishableBeforeFilter} publishable before filter; ${result.publishedDiagnostics} published in ${config.diagnosticsMode} mode.`;
   dependencies.watchMode?.noteManualDiagnosticsPublished({
     filePath: fileUri.fsPath,
     issueCount: result.issueCount,
+    publishableBeforeFilter: result.publishableBeforeFilter,
     publishedDiagnostics: result.publishedDiagnostics,
+    filteredByMode: result.filteredByMode,
     skippedIssues: result.skippedIssues,
     resolutionFailures: result.resolutionFailures,
     message: statusMessage,

@@ -3,6 +3,7 @@ import type { QuickPickItem } from 'vscode';
 import {
   ConfiguredProject,
   ExtensionConfig,
+  normalizeDiagnosticMode,
   ProjectRefreshConfig,
   SphinxDoctorLogLevel,
 } from './types';
@@ -154,6 +155,7 @@ export function getExtensionConfig(): ExtensionConfig {
   return {
     projects: coerceProjects(configuration.get('projects')),
     defaultSourceWorkspaceFolder: configuration.get<string>('defaultSourceWorkspaceFolder', ''),
+    diagnosticsMode: normalizeDiagnosticMode(configuration.get('diagnostics.mode')),
     pythonInterpreter:
       asString(configuration.get('python.interpreter')) ?? DEFAULT_PYTHON_INTERPRETER,
     enrichmentEnabled: asBoolean(configuration.get('enrichment.enabled')) ?? true,
