@@ -39,9 +39,14 @@ Minimal diagnostics extension.
 
 Deliverables:
 
+- short-term Problems bridge for VS Code Tasks
+- auto-activate in likely Sphinx workspaces
 - load enriched diagnostics
 - publish and clear native VS Code diagnostics
+- watch mirror and inventory artifacts and refresh Problems automatically
 - keep extension state file-backed rather than hidden
+- keep manual Extension Development Host testing with fixture and project commands
+- discover likely Sphinx projects from current workspace folders without scanning outside the workspace
 
 ## Phase 4
 

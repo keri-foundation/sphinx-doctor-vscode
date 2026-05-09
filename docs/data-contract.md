@@ -77,7 +77,7 @@ This avoids losing information while keeping editor diagnostics truthful.
 
 ## Future VS Code Consumption
 
-The future extension should load the enriched contract, not the raw inventory. That allows a `DiagnosticCollection` to make publication decisions from explicit fields instead of hidden heuristics.
+The extension should load the enriched contract, not the raw inventory. That allows a `DiagnosticCollection` to make publication decisions from explicit fields instead of hidden heuristics.
 
 Expected consumption pattern:
 
@@ -86,4 +86,10 @@ Expected consumption pattern:
 3. publish editor diagnostics only for issues with trustworthy file anchors
 4. retain all issues for grouped navigation, summaries, and AI packets
 
-The top-level summary should also expose `mappedCount` and `unmappedCount` so the future extension and AI packet generator can report mapping quality without re-counting every issue.
+The top-level summary should also expose `mappedCount` and `unmappedCount` so the extension and AI packet generator can report mapping quality without re-counting every issue.
+
+The current runtime assumes the contract stores one-based lines and columns. It converts those values to zero-based VS Code `Range` positions when publishing diagnostics.
+
+Project-aware loading currently targets enriched `issues.vscode.json` files. If discovery finds only raw `issues.json`, the extension warns instead of trying to reimplement enrichment in TypeScript.
+
+The explicit enrichment command keeps that separation intact. Raw inventory files are transformed by the local Python CLI, written into the analyzed repo's mirror under `.sphinx-diagnostics/`, and then reloaded as enriched `sphinx-diagnostics-v1` JSON for publication.

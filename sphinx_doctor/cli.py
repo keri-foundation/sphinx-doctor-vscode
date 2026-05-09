@@ -9,6 +9,7 @@ from typing import Sequence
 from sphinx_doctor.contract import contract_to_json
 from sphinx_doctor.enrich import EnrichConfig, enrich_contract
 from sphinx_doctor.paths import ensure_parent
+from sphinx_doctor.problems import load_diagnostics_json, render_vscode_problem_output
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,6 +32,11 @@ def build_parser() -> argparse.ArgumentParser:
     enrich_parser.add_argument("--generated-at")
     enrich_parser.add_argument("--tool-version")
 
+    problems_parser = subparsers.add_parser("problems")
+    problems_parser.add_argument("--diagnostics-json", required=True)
+    problems_parser.add_argument("--format", required=True, choices=["vscode"])
+    problems_parser.add_argument("--include-skipped-summary", action="store_true")
+
     return parser
 
 
@@ -38,6 +44,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and write the requested enriched contract."""
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.command == "problems":
+        payload = load_diagnostics_json(Path(args.diagnostics_json))
+        output = render_vscode_problem_output(
+            payload,
+            include_skipped_summary=bool(args.include_skipped_summary),
+        )
+        print(output, end="")
+        return 0
 
     if args.command != "enrich":
         parser.error("Unsupported command")

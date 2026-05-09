@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "sphinx-doctor-fixture-problems",
+      "type": "shell",
+      "command": "python3 -m sphinx_doctor.cli enrich --raw-issues fixtures/raw/keripy-coring-unexpected-indentation.sample.json --source-root fixtures/source/keripy --inventory-root . --project-id keripy --source-workspace-folder 02-keripy --inventory-workspace-folder 01-keri-notes --repo-root . --docs-root docs --mirror-root .sphinx-diagnostics --run-id fixture-run-001 --generated-at 2026-05-08T18:28:00Z --tool-version 0.1.0 --out /tmp/sphinx-doctor-fixture-output.json && python3 -m sphinx_doctor.cli problems --diagnostics-json /tmp/sphinx-doctor-fixture-output.json --format vscode",
+      "options": {
+        "cwd": "${workspaceFolder:11-sphinx-doctor}"
+      },
+      "problemMatcher": {
+        "owner": "sphinx-doctor",
+        "fileLocation": [
+          "relative",
+          "${workspaceFolder:02-keripy}"
+        ],
+        "pattern": {
+          "regexp": "^([^:]+):(\\d+):(\\d+):\\s+(error|warning|info):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      }
+    }
+  ]
+}

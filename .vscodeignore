@@ -1,0 +1,11 @@
+.git/**
+.github/**
+.vscode/**
+.vscode-test/**
+node_modules/**
+tests/**
+__pycache__/**
+*.pyc
+docs/**
+examples/**
+schema/**

@@ -12,6 +12,10 @@ This file is for AI-assisted review workflows. It complements native Problems di
 
 `latest-for-ai.md` gives GitHub Copilot and other agents a deterministic summary of the currently selected diagnostics run without forcing them to reconstruct context from terminal output.
 
+Until that file exists, the extension's published Problems diagnostics are the primary editor-facing context surface for Copilot-assisted fixes.
+
+The enrichment command already writes `.sphinx-diagnostics/latest.json` beside archived run snapshots, so the future AI packet writer can build on a stable analyzed-repo mirror instead of transient terminal output.
+
 It should be readable on its own and stable enough that agents can depend on its section order.
 
 ## Recommended Structure

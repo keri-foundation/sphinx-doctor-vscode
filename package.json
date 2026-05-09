@@ -1,0 +1,284 @@
+{
+  "name": "sphinx-doctor-vscode",
+  "publisher": "jaelliot",
+  "displayName": "Sphinx Doctor",
+  "description": "Load Sphinx Doctor diagnostics JSON and publish native VS Code diagnostics.",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "activationEvents": [
+    "onStartupFinished",
+    "onLanguage:python",
+    "workspaceContains:docs/conf.py",
+    "workspaceContains:doc/conf.py",
+    "workspaceContains:source/conf.py",
+    "workspaceContains:conf.py"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/src/extension.js",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -w -p ./",
+    "test": "npm run compile && node --test out/test/extension.test.js",
+    "package": "npm exec --yes --package @vscode/vsce -- vsce package",
+    "install:local": "npm run package && code --install-extension ./sphinx-doctor-vscode-$npm_package_version.vsix --force",
+    "vscode:prepublish": "npm run compile"
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Sphinx Doctor can read local diagnostics JSON files in untrusted workspaces, but Python-based enrichment is disabled until the workspace is trusted."
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "sphinxDoctor.publishSelfTestDiagnostic",
+        "title": "Sphinx Doctor: Publish Self-Test Diagnostic"
+      },
+      {
+        "command": "sphinxDoctor.loadDiagnosticsFile",
+        "title": "Sphinx Doctor: Load Diagnostics File"
+      },
+      {
+        "command": "sphinxDoctor.loadFixtureDiagnostics",
+        "title": "Sphinx Doctor: Load Fixture Diagnostics"
+      },
+      {
+        "command": "sphinxDoctor.loadProjectDiagnostics",
+        "title": "Sphinx Doctor: Load Project Diagnostics"
+      },
+      {
+        "command": "sphinxDoctor.reloadLastDiagnostics",
+        "title": "Sphinx Doctor: Reload Last Diagnostics"
+      },
+      {
+        "command": "sphinxDoctor.enrichAndLoadProjectDiagnostics",
+        "title": "Sphinx Doctor: Enrich and Load Project Diagnostics"
+      },
+      {
+        "command": "sphinxDoctor.refreshProjectDiagnostics",
+        "title": "Sphinx Doctor: Refresh Project Diagnostics"
+      },
+      {
+        "command": "sphinxDoctor.discoverWorkspaceProjects",
+        "title": "Sphinx Doctor: Discover Workspace Projects"
+      },
+      {
+        "command": "sphinxDoctor.discoverAndLoadDiagnostics",
+        "title": "Sphinx Doctor: Discover and Load Diagnostics"
+      },
+      {
+        "command": "sphinxDoctor.clearDiagnostics",
+        "title": "Sphinx Doctor: Clear Diagnostics"
+      },
+      {
+        "command": "sphinxDoctor.showStatus",
+        "title": "Sphinx Doctor: Show Status"
+      }
+    ],
+    "configuration": {
+      "title": "Sphinx Doctor",
+      "properties": {
+        "sphinxDoctor.projects": {
+          "type": "array",
+          "default": [],
+          "description": "Configured Sphinx Doctor projects for multi-root workspaces.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "sourceWorkspaceFolder",
+              "inventoryWorkspaceFolder",
+              "inventorySearchGlobs"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Stable project identifier used for logs and future run artifacts."
+              },
+              "label": {
+                "type": "string",
+                "description": "Human-readable label shown in Quick Pick project selection."
+              },
+              "sourceWorkspaceFolder": {
+                "type": "string",
+                "description": "Workspace folder name that owns repo-relative source paths such as 02-keripy."
+              },
+              "inventoryWorkspaceFolder": {
+                "type": "string",
+                "description": "Workspace folder name searched for diagnostics inventory files such as 01-keri-notes."
+              },
+              "repoRoot": {
+                "type": "string",
+                "default": ".",
+                "description": "Repository root relative to the source workspace folder."
+              },
+              "docsRoot": {
+                "type": "string",
+                "description": "Optional docs root for future doc-focused surfaces."
+              },
+              "inventorySearchGlobs": {
+                "type": "array",
+                "description": "Relative glob patterns searched under the inventory workspace folder.",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "preferredInventoryFiles": {
+                "type": "array",
+                "description": "Preferred diagnostics filenames, ordered from most preferred to least preferred.",
+                "items": {
+                  "type": "string"
+                },
+                "default": [
+                  "issues.vscode.json",
+                  "issues.json"
+                ]
+              },
+              "mirrorRoot": {
+                "type": "string",
+                "description": "Optional mirror root for later latest.json and latest-for-ai.md outputs."
+              },
+              "refresh": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "Optional external refresh command for producing fresh diagnostics artifacts before publish.",
+                "required": [
+                  "cwdWorkspaceFolder",
+                  "command",
+                  "args",
+                  "expectedOutputGlobs"
+                ],
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Allow this project to run its configured refresh command."
+                  },
+                  "cwdWorkspaceFolder": {
+                    "type": "string",
+                    "description": "Workspace folder used as the current working directory for the refresh command."
+                  },
+                  "command": {
+                    "type": "string",
+                    "description": "Executable used to refresh diagnostics, for example bash or python3."
+                  },
+                  "args": {
+                    "type": "array",
+                    "description": "Tokenized arguments passed to the refresh command.",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "expectedOutputGlobs": {
+                    "type": "array",
+                    "description": "Relative glob patterns searched under the inventory workspace folder after refresh completes.",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "sphinxDoctor.defaultSourceWorkspaceFolder": {
+          "type": "string",
+          "default": "",
+          "description": "Workspace folder name used to resolve repo-relative diagnostic paths."
+        },
+        "sphinxDoctor.python.interpreter": {
+          "type": "string",
+          "default": "python3",
+          "description": "Python interpreter used to run Sphinx Doctor enrichment commands."
+        },
+        "sphinxDoctor.enrichment.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow Sphinx Doctor to run its local Python enrichment CLI for raw Sphinx inventory JSON."
+        },
+        "sphinxDoctor.enrichment.autoRun": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically run enrichment when raw issues.json changes. Requires trusted workspace and enrichment to be enabled."
+        },
+        "sphinxDoctor.discovery.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable discovery of Sphinx projects from VS Code workspace folders."
+        },
+        "sphinxDoctor.discovery.includeLowConfidence": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include low-confidence workspace folders in Sphinx project discovery."
+        },
+        "sphinxDoctor.discovery.inventoryWorkspaceFolderNames": {
+          "type": "array",
+          "default": [
+            "01-keri-notes"
+          ],
+          "description": "Workspace folder names allowed as shared inventory artifact roots.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sphinxDoctor.discovery.excludeWorkspaceFolders": {
+          "type": "array",
+          "default": [],
+          "description": "Workspace folder names that Sphinx Doctor must skip during source-project discovery.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "sphinxDoctor.watch.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically watch Sphinx Doctor diagnostics artifacts and publish Problems diagnostics."
+        },
+        "sphinxDoctor.watch.autoLoadOnStartup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Load latest diagnostics automatically when the extension activates."
+        },
+        "sphinxDoctor.watch.debounceMs": {
+          "type": "number",
+          "default": 750,
+          "description": "Debounce delay for diagnostics file watcher refresh.",
+          "minimum": 0
+        },
+        "sphinxDoctor.refresh.autoRunOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically run one refresh per known project after activation in a trusted workspace. Disabled by default."
+        },
+        "sphinxDoctor.refresh.autoRunOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically run a debounced project refresh after saving a relevant source or docs file in a trusted workspace. Disabled by default."
+        },
+        "sphinxDoctor.logLevel": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
+          "default": "info",
+          "description": "Log level for the Sphinx Doctor output channel."
+        }
+      }
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^20.17.47",
+    "@types/vscode": "^1.100.0",
+    "typescript": "^5.8.3"
+  }
+}

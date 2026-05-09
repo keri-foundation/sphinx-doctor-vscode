@@ -1,0 +1,1199 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import test from 'node:test';
+
+import {
+  buildEnrichmentRunPlan,
+  buildRunId,
+  getEnrichmentPermission,
+} from '../src/enrichmentRunner';
+import {
+  buildRefreshRunPlan,
+  filterRecentInventoryCandidates,
+  getRefreshPermission,
+  inferProjectRefreshConfig,
+} from '../src/refreshRunner';
+import {
+  buildDiagnosticMessage,
+  ConfiguredProject,
+  DiagnosticsContract,
+  DiagnosticsIssue,
+  normalizeSeverityName,
+  shouldPublishIssue,
+  toZeroBasedPosition,
+} from '../src/types';
+import {
+  buildProjectQuickPickItems,
+  coerceProjects,
+  projectSelectionMode,
+} from '../src/config';
+import {
+  buildDiscoveryProbePaths,
+  detectProjectFromSnapshot,
+  discoverWorkspaceProjects,
+  mergeProjects,
+} from '../src/projectDiscovery';
+import {
+  buildWatchModeSummary,
+  canAutoRunEnrichment,
+  createSingleFlightController,
+  createDebouncedTrigger,
+  findOwningProjectForPath,
+  formatWatchModeText,
+  getRefreshOnSaveDecision,
+  hasOpenWorkspaceFolders,
+  isExcludedWorkspaceFolder,
+  isRelevantRefreshSavePath,
+  runWatchModeStartup,
+} from '../src/watchModeState';
+import {
+  inspectDiagnosticsBindingPayload,
+  inspectDiagnosticsPayload,
+  inspectDiagnosticsText,
+  isDiagnosticsBindingCompatible,
+} from '../src/loadDiagnostics';
+import {
+  buildSelfTestStatusTooltip,
+  clearPublishedDiagnostics,
+  createSelfTestDiagnosticSpec,
+  publishSelfTestDiagnostic,
+  SELF_TEST_COMMAND_ID,
+  SELF_TEST_MESSAGE,
+  SELF_TEST_SOURCE,
+  SELF_TEST_STATUS_TEXT,
+} from '../src/selfTest';
+import {
+  isRawInventoryFile,
+  orderInventoryCandidates,
+  pickInventoryCandidate,
+  resolveIssueFilePath,
+  selectInventoryCandidate,
+} from '../src/workspace';
+
+const contract: DiagnosticsContract = {
+  schema: 'sphinx-diagnostics-v1',
+  schemaVersion: 1,
+  generatedAt: '2026-05-08T18:28:00Z',
+  tool: { name: 'sphinx-doctor-enricher', version: '0.1.0' },
+  workspace: {
+    sourceWorkspaceFolder: '02-keripy',
+    inventoryWorkspaceFolder: '01-keri-notes',
+    repoRoot: '.',
+    docsRoot: 'docs',
+    mirrorRoot: '.sphinx-diagnostics',
+  },
+  run: {
+    id: 'fixture-run-001',
+    source: 'external-inventory',
+    inventoryFile: 'tmp/run/issues.json',
+    inventoryDir: 'tmp/run',
+  },
+  summary: {
+    total: 1,
+    bySeverity: { error: 1 },
+    byCategory: { 'unexpected-indentation': 1 },
+    mappedCount: 1,
+    unmappedCount: 0,
+    publishedDiagnostics: 1,
+    retainedOnly: 0,
+  },
+  issues: [],
+};
+
+const mappedIssue: DiagnosticsIssue = {
+  id: 'demo-issue',
+  severity: 'error',
+  category: 'unexpected-indentation',
+  code: 'docutils.unexpected-indentation',
+  message: 'Unexpected indentation in autodoc docstring block.',
+  raw: {},
+  objectName: 'keri.core.coring.Number',
+  objectKind: 'class',
+  docstringLine: 6,
+  sourceWorkspaceFolder: '02-keripy',
+  inventoryWorkspaceFolder: '01-keri-notes',
+  repoRelativePath: 'src/keri/core/coring.py',
+  inventoryRelativePath: 'tmp/run/issues.json',
+  rawLocation: 'src/keri/core/coring.py:keri.core.coring.Number:docstring:6',
+  sourceRange: {
+    startLine: 13,
+    startColumn: 5,
+    endLine: 13,
+    endColumn: 29,
+    anchorKind: 'docstring-line',
+  },
+  mapping: {
+    confidence: 'low',
+    strategy: 'ast-docstring-cleaned-line',
+    reason: 'demo',
+    objectResolved: true,
+    lineResolved: true,
+  },
+  publishDiagnostic: true,
+  related: [],
+};
+
+const configuredProject: ConfiguredProject = {
+  id: 'keripy',
+  label: 'keripy',
+  sourceWorkspaceFolder: '02-keripy',
+  inventoryWorkspaceFolder: '01-keri-notes',
+  repoRoot: '.',
+  docsRoot: 'docs',
+  inventorySearchGlobs: [
+    'tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-*/report/issues.vscode.json',
+    'tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-*/report/issues.json',
+  ],
+  preferredInventoryFiles: ['issues.vscode.json', 'issues.json'],
+  mirrorRoot: '.sphinx-diagnostics',
+};
+
+const configuredRefresh = {
+  enabled: true,
+  cwdWorkspaceFolder: '01-keri-notes',
+  command: 'bash',
+  args: [
+    'Devtools/sphinx/run_sphinx_inventory.sh',
+    '--repo-root',
+    'libs/keripy',
+    '--python',
+    'libs/keripy/.venv-docs/bin/python',
+    '--category',
+    'unexpected-indentation',
+    '--context-lines',
+    '16',
+  ],
+  expectedOutputGlobs: [
+    'tmp/sphinx-inventory-keripy-*/report/issues.vscode.json',
+    'tmp/sphinx-inventory-keripy-*/report/issues.json',
+  ],
+};
+
+const rawInventoryPayload = {
+  log_path: '/workspace/notes/tmp/run-001/sphinx.log',
+  repo_root: '/workspace/notes/libs/keripy',
+  generated_at: '2026-05-09T00:36:25.364287+00:00',
+  filters: {
+    category: 'unexpected-indentation',
+    path_filter: null,
+  },
+  summary: {
+    unique_issues: 1,
+    docs_reference_issues: 0,
+    source_docstring_issues: 1,
+  },
+  issues: [
+    {
+      severity: 'ERROR',
+      category: 'unexpected-indentation',
+      path: 'src/keri/core/coring.py',
+      line: 3,
+      location: 'docstring of keri.core.coring.Matter.__init__',
+      object_name: 'keri.core.coring.Matter.__init__',
+      message: 'Unexpected indentation. [docutils]',
+      raw: '/workspace/notes/libs/keripy/src/keri/core/coring.py:docstring of keri.core.coring.Matter.__init__:3: ERROR: Unexpected indentation. [docutils]',
+    },
+  ],
+};
+
+const unknownIssuesFilePayload = {
+  repo_root: '/workspace/notes/libs/keripy',
+  issues: [
+    {
+      hello: 'world',
+    },
+  ],
+};
+
+test('normalizeSeverityName collapses non-error severities for the extension', () => {
+  assert.equal(normalizeSeverityName('error'), 'error');
+  assert.equal(normalizeSeverityName('warning'), 'warning');
+  assert.equal(normalizeSeverityName('information'), 'info');
+  assert.equal(normalizeSeverityName('hint'), 'info');
+});
+
+test('toZeroBasedPosition converts one-based coordinates to zero-based indices', () => {
+  assert.equal(toZeroBasedPosition(1), 0);
+  assert.equal(toZeroBasedPosition(13), 12);
+  assert.equal(toZeroBasedPosition(undefined), 0);
+});
+
+test('shouldPublishIssue requires publish flag, path, and source range', () => {
+  assert.equal(shouldPublishIssue(mappedIssue), true);
+  assert.equal(shouldPublishIssue({ ...mappedIssue, publishDiagnostic: false }), false);
+  assert.equal(shouldPublishIssue({ ...mappedIssue, sourceRange: null }), false);
+  assert.equal(shouldPublishIssue({ ...mappedIssue, repoRelativePath: null }), false);
+});
+
+test('buildDiagnosticMessage includes category, object name, and low-confidence marker', () => {
+  assert.equal(
+    buildDiagnosticMessage(mappedIssue),
+    '[unexpected-indentation] Unexpected indentation in autodoc docstring block. (keri.core.coring.Number) [confidence: low]',
+  );
+});
+
+test('resolveIssueFilePath prefers the named workspace folder', () => {
+  const resolution = resolveIssueFilePath(contract, mappedIssue, {
+    workspaceFolders: [
+      { name: '11-sphinx-doctor', fsPath: '/workspace/sphinx-doctor' },
+      { name: '02-keripy', fsPath: '/workspace/keripy' },
+    ],
+  });
+
+  assert.equal(resolution.strategy, 'source-workspace-folder');
+  assert.equal(resolution.filePath, '/workspace/keripy/src/keri/core/coring.py');
+});
+
+test('resolveIssueFilePath can fall back to the fixture source root', () => {
+  const resolution = resolveIssueFilePath(contract, mappedIssue, {
+    workspaceFolders: [{ name: '11-sphinx-doctor', fsPath: '/workspace/sphinx-doctor' }],
+    fixtureSourceRoot: '/workspace/sphinx-doctor/fixtures/source/keripy',
+    allowFirstFolderFallback: true,
+  });
+
+  assert.equal(resolution.strategy, 'fixture-source-root');
+  assert.equal(
+    resolution.filePath,
+    '/workspace/sphinx-doctor/fixtures/source/keripy/src/keri/core/coring.py',
+  );
+});
+
+test('coerceProjects keeps valid project settings and drops incomplete entries', () => {
+  const projects = coerceProjects([
+    {
+      ...configuredProject,
+      refresh: configuredRefresh,
+    },
+    {
+      id: 'broken',
+      sourceWorkspaceFolder: '02-keripy',
+    },
+  ]);
+
+  assert.equal(projects.length, 1);
+  assert.deepEqual(projects[0], {
+    ...configuredProject,
+    refresh: configuredRefresh,
+  });
+});
+
+test('projectSelectionMode distinguishes none, single, and multi-project selection', () => {
+  assert.equal(projectSelectionMode([]), 'none');
+  assert.equal(projectSelectionMode([configuredProject]), 'single');
+  assert.equal(projectSelectionMode([configuredProject, { ...configuredProject, id: 'hio', label: 'hio' }]), 'pick');
+});
+
+test('buildProjectQuickPickItems exposes label, id, and workspace details', () => {
+  const [item] = buildProjectQuickPickItems([configuredProject]);
+  assert.equal(item.label, 'keripy');
+  assert.equal(item.description, 'keripy');
+  assert.equal(item.detail, '02-keripy <- 01-keri-notes');
+});
+
+test('orderInventoryCandidates prefers the newest run directory and preferred filenames inside it', () => {
+  const ordered = orderInventoryCandidates(
+    [
+      {
+        filePath: '/workspace/notes/tmp/run-001/report/issues.vscode.json',
+        fileName: 'issues.vscode.json',
+        directoryPath: '/workspace/notes/tmp/run-001/report',
+        modifiedTime: 100,
+      },
+      {
+        filePath: '/workspace/notes/tmp/run-002/report/issues.json',
+        fileName: 'issues.json',
+        directoryPath: '/workspace/notes/tmp/run-002/report',
+        modifiedTime: 220,
+      },
+      {
+        filePath: '/workspace/notes/tmp/run-002/report/issues.vscode.json',
+        fileName: 'issues.vscode.json',
+        directoryPath: '/workspace/notes/tmp/run-002/report',
+        modifiedTime: 210,
+      },
+    ],
+    ['issues.vscode.json', 'issues.json'],
+  );
+
+  assert.equal(ordered[0].filePath, '/workspace/notes/tmp/run-002/report/issues.vscode.json');
+  assert.equal(ordered[1].filePath, '/workspace/notes/tmp/run-002/report/issues.json');
+  assert.equal(ordered[2].filePath, '/workspace/notes/tmp/run-001/report/issues.vscode.json');
+});
+
+test('pickInventoryCandidate returns the preferred diagnostics file from the latest run', () => {
+  const candidate = pickInventoryCandidate(
+    [
+      {
+        filePath: '/workspace/notes/tmp/run-002/report/issues.json',
+        fileName: 'issues.json',
+        directoryPath: '/workspace/notes/tmp/run-002/report',
+        modifiedTime: 220,
+      },
+      {
+        filePath: '/workspace/notes/tmp/run-002/report/issues.vscode.json',
+        fileName: 'issues.vscode.json',
+        directoryPath: '/workspace/notes/tmp/run-002/report',
+        modifiedTime: 210,
+      },
+    ],
+    ['issues.vscode.json', 'issues.json'],
+  );
+
+  assert.equal(candidate?.filePath, '/workspace/notes/tmp/run-002/report/issues.vscode.json');
+});
+
+test('inspectDiagnosticsPayload distinguishes enriched, raw, and unknown payloads', () => {
+  assert.equal(inspectDiagnosticsPayload(contract), 'enriched');
+  assert.equal(
+    inspectDiagnosticsPayload({
+      schema: 'sphinx-inventory-sample-v1',
+      issues: [],
+    }),
+    'raw',
+  );
+  assert.equal(inspectDiagnosticsPayload(rawInventoryPayload), 'raw');
+  assert.equal(inspectDiagnosticsPayload({ schema: 'something-else' }), 'unknown');
+  assert.equal(inspectDiagnosticsPayload(unknownIssuesFilePayload), 'unknown');
+});
+
+test('inspectDiagnosticsBindingPayload extracts raw repo roots and enriched source folders', () => {
+  assert.deepEqual(
+    inspectDiagnosticsBindingPayload({
+      ...rawInventoryPayload,
+      repo_root: '/workspace/keripy-temp',
+    }),
+    {
+      kind: 'raw',
+      repoRoot: '/workspace/keripy-temp',
+    },
+  );
+
+  assert.deepEqual(
+    inspectDiagnosticsBindingPayload({
+      schema: 'sphinx-diagnostics-v1',
+      schemaVersion: 1,
+      workspace: { sourceWorkspaceFolder: '02-keripy' },
+      issues: [],
+    }),
+    {
+      kind: 'enriched',
+      sourceWorkspaceFolder: '02-keripy',
+    },
+  );
+});
+
+test('createSelfTestDiagnosticSpec targets line 1 with the expected warning payload', () => {
+  assert.deepEqual(createSelfTestDiagnosticSpec(), {
+    startLine: 0,
+    startColumn: 0,
+    endLine: 0,
+    endColumn: 1,
+    message: SELF_TEST_MESSAGE,
+    source: SELF_TEST_SOURCE,
+    severity: 'warning',
+  });
+});
+
+test('publishSelfTestDiagnostic writes one diagnostic for one target URI', () => {
+  let recordedTarget: string | undefined;
+  let recordedDiagnostics: Array<{ message: string; source: string }> = [];
+
+  const result = publishSelfTestDiagnostic(
+    (target: string, diagnostics: readonly { message: string; source: string }[]) => {
+      recordedTarget = target;
+      recordedDiagnostics = [...diagnostics];
+    },
+    'file:///workspace/demo.py',
+    (spec) => ({
+      message: spec.message,
+      source: spec.source,
+    }),
+  );
+
+  assert.equal(recordedTarget, 'file:///workspace/demo.py');
+  assert.equal(recordedDiagnostics.length, 1);
+  assert.equal(recordedDiagnostics[0]?.message, SELF_TEST_MESSAGE);
+  assert.equal(recordedDiagnostics[0]?.source, SELF_TEST_SOURCE);
+  assert.deepEqual(result, { diagnosticCount: 1, targetUriCount: 1 });
+});
+
+test('clearPublishedDiagnostics clears self-test diagnostics from the collection', () => {
+  const collection = {
+    cleared: false,
+    clear() {
+      this.cleared = true;
+    },
+  };
+
+  clearPublishedDiagnostics(collection);
+  assert.equal(collection.cleared, true);
+});
+
+test('self-test status text and tooltip stay explicit for visibility debugging', () => {
+  assert.equal(SELF_TEST_STATUS_TEXT, 'Sphinx Doctor: self-test diagnostic published');
+  assert.equal(
+    buildSelfTestStatusTooltip('file:///workspace/demo.py', 1),
+    [
+      'Sphinx Doctor self-test diagnostic published.',
+      'Target: file:///workspace/demo.py',
+      'Published diagnostics: 1',
+    ].join('\n'),
+  );
+});
+
+test('isDiagnosticsBindingCompatible rejects inventories generated for a different worktree', () => {
+  const rawMismatch = isDiagnosticsBindingCompatible(
+    {
+      kind: 'raw',
+      repoRoot: '/workspace/keripy-sphinx-cleanup',
+    },
+    {
+      sourceWorkspaceFolder: '02-keripy',
+      sourceRoot: '/workspace/keripy',
+    },
+  );
+  assert.equal(rawMismatch.compatible, false);
+  assert.match(rawMismatch.reason ?? '', /repo_root|source root/i);
+
+  const enrichedMismatch = isDiagnosticsBindingCompatible(
+    {
+      kind: 'enriched',
+      sourceWorkspaceFolder: '13-keripy-sphinx-batch-01',
+    },
+    {
+      sourceWorkspaceFolder: '02-keripy',
+      sourceRoot: '/workspace/keripy',
+    },
+  );
+  assert.equal(enrichedMismatch.compatible, false);
+  assert.match(enrichedMismatch.reason ?? '', /workspace folder/i);
+});
+
+test('isDiagnosticsBindingCompatible rejects unknown payloads and accepts matching raw inventory', () => {
+  const unknown = isDiagnosticsBindingCompatible(
+    {
+      kind: 'unknown',
+    },
+    {
+      sourceWorkspaceFolder: '02-keripy',
+      sourceRoot: '/workspace/keripy',
+    },
+  );
+  assert.equal(unknown.compatible, false);
+  assert.match(unknown.reason ?? '', /not recognized/i);
+
+  const rawMatch = isDiagnosticsBindingCompatible(
+    {
+      kind: 'raw',
+      repoRoot: '/workspace/keripy',
+    },
+    {
+      sourceWorkspaceFolder: '02-keripy',
+      sourceRoot: '/workspace/keripy',
+    },
+  );
+  assert.equal(rawMatch.compatible, true);
+});
+
+test('inspectDiagnosticsText and filename helpers identify raw and enriched files', () => {
+  assert.equal(inspectDiagnosticsText(JSON.stringify(contract)), 'enriched');
+  assert.equal(
+    inspectDiagnosticsText(JSON.stringify(rawInventoryPayload)),
+    'raw',
+  );
+  assert.equal(isRawInventoryFile('issues.json'), true);
+  assert.equal(isRawInventoryFile('issues.vscode.json'), false);
+});
+
+test('buildRunId formats timestamps as YYYYMMDD-HHMMSS', () => {
+  assert.equal(buildRunId(new Date(2026, 4, 8, 18, 28, 30)), '20260508-182830');
+});
+
+test('getEnrichmentPermission blocks disabled or untrusted execution', () => {
+  assert.equal(getEnrichmentPermission(true, true).allowed, true);
+  assert.equal(getEnrichmentPermission(false, true).allowed, false);
+  assert.equal(getEnrichmentPermission(true, false).allowed, false);
+});
+
+test('buildEnrichmentRunPlan keeps source, inventory, and mirror roots separated', () => {
+  const plan = buildEnrichmentRunPlan({
+    extensionRoot: '/workspace/sphinx-doctor',
+    pythonInterpreter: 'python3',
+    project: configuredProject,
+    workspaceFolders: [
+      { name: '11-sphinx-doctor', fsPath: '/workspace/sphinx-doctor' },
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/keripy' },
+    ],
+    rawIssuesPath: '/workspace/notes/tmp/run-002/report/issues.json',
+    now: new Date(2026, 4, 8, 18, 28, 30),
+  });
+
+  assert.equal(plan.command, 'python3');
+  assert.equal(Array.isArray(plan.args), true);
+  assert.equal(plan.cwd, '/workspace/sphinx-doctor');
+  assert.equal(plan.sourceRoot, '/workspace/keripy');
+  assert.equal(plan.inventoryRoot, '/workspace/notes');
+  assert.equal(plan.mirrorRootPath, '/workspace/keripy/.sphinx-diagnostics');
+  assert.equal(
+    plan.archiveOutputPath,
+    '/workspace/keripy/.sphinx-diagnostics/runs/20260508-182830/enriched.json',
+  );
+  assert.equal(plan.latestOutputPath, '/workspace/keripy/.sphinx-diagnostics/latest.json');
+  assert.deepEqual(plan.args.slice(0, 4), ['-m', 'sphinx_doctor.cli', 'enrich', '--raw-issues']);
+  assert.equal(plan.args.includes('/workspace/notes/tmp/run-002/report/issues.json'), true);
+});
+
+test('buildEnrichmentRunPlan uses explicit roots and never collapses source into inventory', () => {
+  const plan = buildEnrichmentRunPlan({
+    extensionRoot: '/workspace/sphinx-doctor',
+    pythonInterpreter: 'python3',
+    project: configuredProject,
+    workspaceFolders: [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/keripy' },
+    ],
+    rawIssuesPath: '/workspace/notes/tmp/run-003/report/issues.json',
+    now: new Date(2026, 4, 8, 20, 0, 0),
+  });
+
+  assert.notEqual(plan.sourceRoot, plan.inventoryRoot);
+  assert.equal(plan.docsRoot, 'docs');
+  assert.equal(plan.mirrorRoot, '.sphinx-diagnostics');
+});
+
+test('getRefreshPermission blocks missing, disabled, or untrusted refresh execution', () => {
+  assert.equal(getRefreshPermission(true, configuredRefresh).allowed, true);
+  assert.equal(getRefreshPermission(true, undefined).allowed, false);
+  assert.equal(getRefreshPermission(false, configuredRefresh).allowed, false);
+  assert.equal(
+    getRefreshPermission(true, {
+      ...configuredRefresh,
+      enabled: false,
+    }).allowed,
+    false,
+  );
+});
+
+test('buildRefreshRunPlan keeps cwd, source, inventory, and mirror roots separated', () => {
+  const plan = buildRefreshRunPlan({
+    project: configuredProject,
+    refresh: configuredRefresh,
+    workspaceFolders: [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+    ],
+    now: new Date(2026, 4, 9, 12, 34, 56),
+  });
+
+  assert.equal(plan.command, 'bash');
+  assert.equal(plan.cwd, '/workspace/notes');
+  assert.equal(plan.sourceRoot, '/workspace/notes/libs/keripy');
+  assert.equal(plan.inventoryRoot, '/workspace/notes');
+  assert.equal(plan.mirrorRootPath, '/workspace/notes/libs/keripy/.sphinx-diagnostics');
+  assert.equal(plan.startedAtMs, new Date(2026, 4, 9, 12, 34, 56).getTime());
+  assert.deepEqual(plan.expectedOutputGlobs, configuredRefresh.expectedOutputGlobs);
+});
+
+test('inferProjectRefreshConfig derives the Devtools runner for the standard notes workspace layout', async () => {
+  const existingPaths = new Set([
+    '/workspace/notes/Devtools/sphinx/run_sphinx_inventory.sh',
+    '/workspace/notes/libs/keripy/.venv-docs/bin/python',
+    '/workspace/notes/libs/keripy/docs/conf.py',
+  ]);
+
+  const resolution = await inferProjectRefreshConfig({
+    project: configuredProject,
+    workspaceFolders: [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+    ],
+    pathExists: async (filePath) => existingPaths.has(filePath),
+  });
+
+  assert.equal(resolution.source, 'inferred');
+  assert.deepEqual(resolution.config, configuredRefresh);
+});
+
+test('filterRecentInventoryCandidates rejects outputs that predate the current refresh run', () => {
+  const candidates = filterRecentInventoryCandidates(
+    [
+      {
+        filePath: '/workspace/notes/tmp/run-001/report/issues.json',
+        fileName: 'issues.json',
+        directoryPath: '/workspace/notes/tmp/run-001/report',
+        modifiedTime: 100,
+      },
+      {
+        filePath: '/workspace/notes/tmp/run-002/report/issues.json',
+        fileName: 'issues.json',
+        directoryPath: '/workspace/notes/tmp/run-002/report',
+        modifiedTime: 250,
+      },
+    ],
+    200,
+  );
+
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0]?.filePath, '/workspace/notes/tmp/run-002/report/issues.json');
+});
+
+test('detectProjectFromSnapshot finds a high-confidence Sphinx project from docs/conf.py', () => {
+  const project = detectProjectFromSnapshot(
+    { name: '02-keripy', fsPath: '/workspace/keripy' },
+    {
+      existingPaths: new Set(['docs/conf.py']),
+      fileContents: {},
+    },
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: [],
+      availableWorkspaceFolderNames: ['01-keri-notes', '02-keripy'],
+    },
+  );
+
+  assert.equal(project?.discoveryConfidence, 'high');
+  assert.equal(project?.docsRoot, 'docs');
+  assert.equal(project?.sourceWorkspaceFolder, '02-keripy');
+  assert.equal(project?.inventoryWorkspaceFolder, '01-keri-notes');
+});
+
+test('detectProjectFromSnapshot finds a medium-confidence Sphinx project from docs/Makefile', () => {
+  const project = detectProjectFromSnapshot(
+    { name: '03-hio', fsPath: '/workspace/hio' },
+    {
+      existingPaths: new Set(['docs/Makefile']),
+      fileContents: {},
+    },
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: [],
+      availableWorkspaceFolderNames: ['01-keri-notes', '03-hio'],
+    },
+  );
+
+  assert.equal(project?.discoveryConfidence, 'medium');
+  assert.equal(project?.docsRoot, 'docs');
+});
+
+test('detectProjectFromSnapshot treats 01-keri-notes as a shared inventory root, not the source repo', () => {
+  const project = detectProjectFromSnapshot(
+    { name: '02-keripy', fsPath: '/workspace/keripy' },
+    {
+      existingPaths: new Set(['docs/conf.py']),
+      fileContents: {},
+    },
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: [],
+      availableWorkspaceFolderNames: ['01-keri-notes', '02-keripy'],
+    },
+  );
+
+  assert.equal(project?.sourceWorkspaceFolder, '02-keripy');
+  assert.equal(project?.inventoryWorkspaceFolder, '01-keri-notes');
+  assert.equal(
+    project?.inventorySearchTargets?.some((target) => target.workspaceFolderName === '01-keri-notes'),
+    true,
+  );
+});
+
+test('detectProjectFromSnapshot can include a low-confidence docs-only project when enabled', () => {
+  const project = detectProjectFromSnapshot(
+    { name: '09-fortweb', fsPath: '/workspace/fortweb' },
+    {
+      existingPaths: new Set(['docs']),
+      fileContents: {},
+    },
+    {
+      includeLowConfidence: true,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: [],
+      availableWorkspaceFolderNames: ['01-keri-notes', '09-fortweb'],
+    },
+  );
+
+  assert.equal(project?.discoveryConfidence, 'low');
+  assert.equal(project?.docsRoot, 'docs');
+});
+
+test('detectProjectFromSnapshot ignores irrelevant workspace folders', () => {
+  const project = detectProjectFromSnapshot(
+    { name: '20-billing-ops-tasks', fsPath: '/workspace/billing' },
+    {
+      existingPaths: new Set(['README.md']),
+      fileContents: {},
+    },
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: [],
+      availableWorkspaceFolderNames: ['01-keri-notes', '20-billing-ops-tasks'],
+    },
+  );
+
+  assert.equal(project, undefined);
+});
+
+test('discoverWorkspaceProjects skips excluded workspace folders', async () => {
+  const projects = await discoverWorkspaceProjects(
+    [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/keripy' },
+      { name: '11-sphinx-doctor', fsPath: '/workspace/sphinx-doctor' },
+    ],
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: ['01-keri-notes', '11-sphinx-doctor'],
+    },
+    {
+      exists: async (filePath) => filePath === '/workspace/keripy/docs/conf.py',
+      readText: async () => undefined,
+    },
+  );
+
+  assert.deepEqual(projects.map((project) => project.sourceWorkspaceFolder), ['02-keripy']);
+});
+
+test('detected projects still include a source mirror latest.json target for artifact watching', () => {
+  const project = detectProjectFromSnapshot(
+    { name: '02-keripy', fsPath: '/workspace/keripy' },
+    {
+      existingPaths: new Set(['docs/conf.py']),
+      fileContents: {},
+    },
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: [],
+      availableWorkspaceFolderNames: ['01-keri-notes', '02-keripy'],
+    },
+  );
+
+  assert.equal(
+    project?.inventorySearchTargets?.some(
+      (target) =>
+        target.workspaceFolderName === '02-keripy' &&
+        target.globs.includes('.sphinx-diagnostics/latest.json'),
+    ),
+    true,
+  );
+});
+
+test('extension manifest declares the stable sphinxDoctor settings surface', async () => {
+  const manifestText = await readFile(path.resolve(__dirname, '..', '..', 'package.json'), 'utf8');
+  const manifest = JSON.parse(manifestText) as {
+    activationEvents?: string[];
+    contributes?: {
+      commands?: Array<{
+        command?: string;
+        title?: string;
+      }>;
+      configuration?: {
+        properties?: Record<string, unknown>;
+      };
+    };
+  };
+
+  const commandIds = new Set(
+    (manifest.contributes?.commands ?? []).map((command) => command.command).filter(Boolean),
+  );
+  assert.equal(commandIds.has(SELF_TEST_COMMAND_ID), true);
+  assert.equal(commandIds.has('sphinxDoctor.refreshProjectDiagnostics'), true);
+
+  const selfTestCommand = (manifest.contributes?.commands ?? []).find(
+    (command) => command.command === SELF_TEST_COMMAND_ID,
+  );
+  assert.equal(selfTestCommand?.title, 'Sphinx Doctor: Publish Self-Test Diagnostic');
+
+  const refreshCommand = (manifest.contributes?.commands ?? []).find(
+    (command) => command.command === 'sphinxDoctor.refreshProjectDiagnostics',
+  );
+  assert.equal(refreshCommand?.title, 'Sphinx Doctor: Refresh Project Diagnostics');
+
+  const properties = manifest.contributes?.configuration?.properties ?? {};
+  for (const key of [
+    'sphinxDoctor.projects',
+    'sphinxDoctor.python.interpreter',
+    'sphinxDoctor.enrichment.enabled',
+    'sphinxDoctor.enrichment.autoRun',
+    'sphinxDoctor.defaultSourceWorkspaceFolder',
+    'sphinxDoctor.watch.enabled',
+    'sphinxDoctor.watch.autoLoadOnStartup',
+    'sphinxDoctor.watch.debounceMs',
+    'sphinxDoctor.refresh.autoRunOnStartup',
+    'sphinxDoctor.refresh.autoRunOnSave',
+    'sphinxDoctor.discovery.enabled',
+    'sphinxDoctor.discovery.includeLowConfidence',
+    'sphinxDoctor.discovery.inventoryWorkspaceFolderNames',
+    'sphinxDoctor.discovery.excludeWorkspaceFolders',
+    'sphinxDoctor.logLevel',
+  ]) {
+    assert.equal(Object.prototype.hasOwnProperty.call(properties, key), true, key);
+  }
+});
+
+test('launch config exposes one obvious primary extension host workflow', async () => {
+  const launchText = await readFile(
+    path.resolve(__dirname, '..', '..', '.vscode', 'launch.json'),
+    'utf8',
+  );
+  const launch = JSON.parse(launchText) as {
+    configurations?: Array<{
+      name?: string;
+      type?: string;
+      args?: string[];
+      preLaunchTask?: string;
+    }>;
+  };
+
+  const primary = (launch.configurations ?? []).find(
+    (configuration) => configuration.name === 'Run Sphinx Doctor Extension Host',
+  );
+
+  assert.equal(primary?.type, 'extensionHost');
+  assert.equal(primary?.preLaunchTask, 'npm: compile');
+  assert.deepEqual(primary?.args?.slice(0, 3), [
+    '--new-window',
+    '--disable-extensions',
+    '--extensionDevelopmentPath=${workspaceFolder}',
+  ]);
+});
+
+test('extension manifest exposes local package and install scripts', async () => {
+  const manifestText = await readFile(path.resolve(__dirname, '..', '..', 'package.json'), 'utf8');
+  const manifest = JSON.parse(manifestText) as {
+    publisher?: string;
+    scripts?: Record<string, string>;
+  };
+
+  assert.equal(manifest.publisher, 'jaelliot');
+  assert.equal(manifest.scripts?.package, 'npm exec --yes --package @vscode/vsce -- vsce package');
+  assert.equal(
+    manifest.scripts?.['install:local'],
+    'npm run package && code --install-extension ./sphinx-doctor-vscode-$npm_package_version.vsix --force',
+  );
+});
+
+test('mergeProjects keeps explicit projects and suppresses discovered duplicates by source folder', () => {
+  const merged = mergeProjects(
+    [configuredProject],
+    [
+      {
+        ...configuredProject,
+        id: 'discovered-keripy',
+        discoveryConfidence: 'high',
+        discoveryReasons: ['high-confidence marker: docs/conf.py'],
+        origin: 'discovered',
+      },
+      {
+        ...configuredProject,
+        id: 'hio',
+        sourceWorkspaceFolder: '03-hio',
+        inventoryWorkspaceFolder: '01-keri-notes',
+        discoveryConfidence: 'medium',
+        discoveryReasons: ['medium-confidence marker: docs/Makefile'],
+        origin: 'discovered',
+      },
+    ],
+  );
+
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].origin, 'configured');
+  assert.equal(merged[1].sourceWorkspaceFolder, '03-hio');
+});
+
+test('buildDiscoveryProbePaths stays bounded to relative workspace paths', () => {
+  assert.equal(
+    buildDiscoveryProbePaths().every((entry) => !entry.startsWith('/') && !entry.startsWith('..')),
+    true,
+  );
+});
+
+test('selectInventoryCandidate prefers issues.vscode.json over issues.json for matching projects', () => {
+  const result = selectInventoryCandidate(
+    configuredProject,
+    [
+      {
+        filePath: '/workspace/notes/tmp/sphinx-inventory-keripy-001/report/issues.json',
+        fileName: 'issues.json',
+        directoryPath: '/workspace/notes/tmp/sphinx-inventory-keripy-001/report',
+        modifiedTime: 100,
+      },
+      {
+        filePath: '/workspace/notes/tmp/sphinx-inventory-keripy-001/report/issues.vscode.json',
+        fileName: 'issues.vscode.json',
+        directoryPath: '/workspace/notes/tmp/sphinx-inventory-keripy-001/report',
+        modifiedTime: 100,
+      },
+    ],
+    ['issues.vscode.json', 'issues.json'],
+  );
+
+  assert.equal(result.selected?.fileName, 'issues.vscode.json');
+});
+
+test('selectInventoryCandidate reports ambiguity instead of silently guessing', () => {
+  const ambiguousProject = {
+    ...configuredProject,
+    id: 'keripy-sphinx-cleanup',
+    label: 'keripy sphinx cleanup',
+    sourceWorkspaceFolder: '13-keripy-sphinx-batch-01',
+  };
+
+  const result = selectInventoryCandidate(
+    ambiguousProject,
+    [
+      {
+        filePath: '/workspace/notes/tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-a/report/issues.vscode.json',
+        fileName: 'issues.vscode.json',
+        directoryPath: '/workspace/notes/tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-a/report',
+        modifiedTime: 100,
+      },
+      {
+        filePath: '/workspace/notes/tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-b/report/issues.vscode.json',
+        fileName: 'issues.vscode.json',
+        directoryPath: '/workspace/notes/tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-b/report',
+        modifiedTime: 100,
+      },
+    ],
+    ['issues.vscode.json', 'issues.json'],
+  );
+
+  assert.equal(result.selected, undefined);
+  assert.equal(result.ambiguous?.length, 2);
+});
+
+test('runWatchModeStartup does not refresh when watch mode is disabled', async () => {
+  let refreshCalls = 0;
+
+  const started = await runWatchModeStartup({
+    config: {
+      watchEnabled: false,
+      watchAutoLoadOnStartup: true,
+    },
+    refresh: async () => {
+      refreshCalls += 1;
+    },
+  });
+
+  assert.equal(started, false);
+  assert.equal(refreshCalls, 0);
+});
+
+test('runWatchModeStartup refreshes on activation when watch mode is enabled', async () => {
+  const calls: Array<{ reason: string; loadDiagnostics: boolean }> = [];
+
+  const started = await runWatchModeStartup({
+    config: {
+      watchEnabled: true,
+      watchAutoLoadOnStartup: true,
+    },
+    refresh: async (reason, loadDiagnostics) => {
+      calls.push({ reason, loadDiagnostics });
+    },
+  });
+
+  assert.equal(started, true);
+  assert.deepEqual(calls, [{ reason: 'activation', loadDiagnostics: true }]);
+});
+
+test('runWatchModeStartup can start watchers without auto-loading diagnostics', async () => {
+  const calls: Array<{ reason: string; loadDiagnostics: boolean }> = [];
+
+  const started = await runWatchModeStartup({
+    config: {
+      watchEnabled: true,
+      watchAutoLoadOnStartup: false,
+    },
+    refresh: async (reason, loadDiagnostics) => {
+      calls.push({ reason, loadDiagnostics });
+    },
+  });
+
+  assert.equal(started, false);
+  assert.deepEqual(calls, [{ reason: 'activation', loadDiagnostics: false }]);
+});
+
+test('createDebouncedTrigger coalesces multiple events into one refresh', () => {
+  const pending: Array<() => void> = [];
+  const reasons: string[] = [];
+
+  const trigger = createDebouncedTrigger(
+    (reason) => {
+      reasons.push(reason);
+    },
+    750,
+    {
+      setTimeout: (callback) => {
+        pending.push(callback);
+        return callback;
+      },
+      clearTimeout: (handle) => {
+        const index = pending.indexOf(handle as () => void);
+        if (index >= 0) {
+          pending.splice(index, 1);
+        }
+      },
+    },
+  );
+
+  trigger.trigger('artifact changed: one');
+  trigger.trigger('artifact changed: two');
+  assert.equal(pending.length, 1);
+  pending[0]();
+
+  assert.deepEqual(reasons, ['artifact changed: two']);
+});
+
+test('isExcludedWorkspaceFolder matches configured discovery exclusions', () => {
+  assert.equal(
+    isExcludedWorkspaceFolder('01-keri-notes', ['01-keri-notes', '11-sphinx-doctor']),
+    true,
+  );
+  assert.equal(isExcludedWorkspaceFolder('02-keripy', ['01-keri-notes']), false);
+});
+
+test('refresh-on-save ignores generated artifacts under .sphinx-diagnostics', () => {
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/.sphinx-diagnostics/latest.json'), false);
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/src/keri/core/coring.py'), true);
+});
+
+test('findOwningProjectForPath resolves the matching source project', () => {
+  const project = findOwningProjectForPath(
+    '/workspace/keripy/src/keri/core/coring.py',
+    [configuredProject, { ...configuredProject, id: 'hio', sourceWorkspaceFolder: '03-hio', label: 'hio' }],
+    [
+      { name: '02-keripy', fsPath: '/workspace/keripy' },
+      { name: '03-hio', fsPath: '/workspace/hio' },
+    ],
+  );
+
+  assert.equal(project?.id, 'keripy');
+});
+
+test('getRefreshOnSaveDecision blocks refresh-on-save when disabled', () => {
+  const decision = getRefreshOnSaveDecision(
+    '/workspace/keripy/src/keri/core/coring.py',
+    [configuredProject],
+    [{ name: '02-keripy', fsPath: '/workspace/keripy' }],
+    {
+      refreshAutoRunOnSave: false,
+      isWorkspaceTrusted: true,
+    },
+  );
+
+  assert.equal(decision.allowed, false);
+  assert.match(decision.reason, /disabled/i);
+});
+
+test('getRefreshOnSaveDecision blocks refresh-on-save in untrusted workspaces', () => {
+  const decision = getRefreshOnSaveDecision(
+    '/workspace/keripy/src/keri/core/coring.py',
+    [configuredProject],
+    [{ name: '02-keripy', fsPath: '/workspace/keripy' }],
+    {
+      refreshAutoRunOnSave: true,
+      isWorkspaceTrusted: false,
+    },
+  );
+
+  assert.equal(decision.allowed, false);
+  assert.match(decision.reason, /trusted workspace/i);
+});
+
+test('getRefreshOnSaveDecision ignores .sphinx-diagnostics saves to avoid loops', () => {
+  const decision = getRefreshOnSaveDecision(
+    '/workspace/keripy/.sphinx-diagnostics/latest.json',
+    [configuredProject],
+    [{ name: '02-keripy', fsPath: '/workspace/keripy' }],
+    {
+      refreshAutoRunOnSave: true,
+      isWorkspaceTrusted: true,
+    },
+  );
+
+  assert.equal(decision.allowed, false);
+  assert.match(decision.reason, /not a relevant/i);
+});
+
+test('getRefreshOnSaveDecision returns the owning project for relevant saves', () => {
+  const decision = getRefreshOnSaveDecision(
+    '/workspace/keripy/docs/index.rst',
+    [configuredProject],
+    [{ name: '02-keripy', fsPath: '/workspace/keripy' }],
+    {
+      refreshAutoRunOnSave: true,
+      isWorkspaceTrusted: true,
+    },
+  );
+
+  assert.equal(decision.allowed, true);
+  assert.equal(decision.project?.id, 'keripy');
+});
+
+test('createSingleFlightController blocks overlapping project refreshes', () => {
+  const controller = createSingleFlightController();
+
+  assert.equal(controller.tryStart('keripy'), true);
+  assert.equal(controller.isRunning('keripy'), true);
+  assert.equal(controller.tryStart('keripy'), false);
+  controller.finish('keripy');
+  assert.equal(controller.tryStart('keripy'), true);
+});
+
+test('formatWatchModeText shows issue counts for active diagnostics', () => {
+  const summary = buildWatchModeSummary({
+    projectCount: 2,
+    loadedProjectCount: 1,
+    issueCount: 30,
+    publishedDiagnostics: 18,
+    watcherCount: 4,
+    rawPendingCount: 0,
+    errorCount: 0,
+  });
+
+  assert.equal(formatWatchModeText(summary), 'Sphinx Doctor: 30 issues');
+});
+
+test('buildWatchModeSummary reports no diagnostics when projects are loaded but empty', () => {
+  const summary = buildWatchModeSummary({
+    projectCount: 1,
+    loadedProjectCount: 0,
+    issueCount: 0,
+    publishedDiagnostics: 0,
+    watcherCount: 2,
+    rawPendingCount: 0,
+    errorCount: 0,
+  });
+
+  assert.equal(summary.state, 'no-diagnostics');
+  assert.equal(summary.publishedDiagnostics, 0);
+});
+
+test('canAutoRunEnrichment blocks watch-mode enrichment when workspace is untrusted', () => {
+  assert.equal(
+    canAutoRunEnrichment(false, {
+      enrichmentEnabled: true,
+      enrichmentAutoRun: true,
+    }),
+    false,
+  );
+  assert.equal(
+    canAutoRunEnrichment(true, {
+      enrichmentEnabled: true,
+      enrichmentAutoRun: true,
+    }),
+    true,
+  );
+});
+
+test('hasOpenWorkspaceFolders reports a safe no-op when no folders are open', () => {
+  assert.equal(hasOpenWorkspaceFolders([]), false);
+  assert.equal(hasOpenWorkspaceFolders([{ name: '02-keripy', fsPath: '/workspace/keripy' }]), true);
+});

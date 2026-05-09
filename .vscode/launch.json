@@ -1,0 +1,36 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Run Sphinx Doctor Extension Host",
+			"type": "extensionHost",
+			"request": "launch",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--new-window",
+				"--disable-extensions",
+				"--extensionDevelopmentPath=${workspaceFolder}",
+				"${workspaceFolder}/../../keri-notes.code-workspace"
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
+			"preLaunchTask": "npm: compile"
+		},
+		{
+			"name": "Run Sphinx Doctor Extension Host (Workspace Extensions Enabled)",
+			"type": "extensionHost",
+			"request": "launch",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--new-window",
+				"--extensionDevelopmentPath=${workspaceFolder}",
+				"${workspaceFolder}/../../keri-notes.code-workspace"
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
+			"preLaunchTask": "npm: compile"
+		}
+	]
+}
