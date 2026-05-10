@@ -55,6 +55,7 @@ import {
   discoverWorkspaceProjectDecisions,
   detectProjectFromSnapshot,
   discoverWorkspaceProjects,
+  parseGitWorktreeListPorcelain,
   mergeProjects,
 } from '../src/projectDiscovery';
 import {
@@ -91,6 +92,7 @@ import {
   isRawInventoryFile,
   orderInventoryCandidates,
   pickInventoryCandidate,
+  resolveProjectSourceRoot,
   resolveIssueFilePath,
   selectInventoryCandidate,
 } from '../src/workspace';
@@ -1444,6 +1446,7 @@ test('discoverWorkspaceProjects skips excluded workspace folders', async () => {
       includeLowConfidence: false,
       inventoryWorkspaceFolderNames: ['01-keri-notes'],
       excludeWorkspaceFolderNames: ['01-keri-notes', '11-sphinx-doctor'],
+      knownProjects: [],
     },
     {
       exists: async (filePath) => filePath === '/workspace/keripy/docs/conf.py',
@@ -1472,6 +1475,7 @@ test('discoverWorkspaceProjectDecisions report discovered and skipped workspace 
       includeLowConfidence: true,
       inventoryWorkspaceFolderNames: ['01-keri-notes'],
       excludeWorkspaceFolderNames: ['01-keri-notes'],
+      knownProjects: [],
     },
     {
       exists: async (filePath) => detectedPaths.has(filePath),
@@ -1676,6 +1680,149 @@ test('buildDiscoveryProbePaths stays bounded to relative workspace paths', () =>
   );
 });
 
+test('parseGitWorktreeListPorcelain parses porcelain worktree entries', () => {
+  const entries = parseGitWorktreeListPorcelain([
+    'worktree /workspace/notes/libs/keripy',
+    'HEAD abc123',
+    'branch refs/heads/main',
+    '',
+    'worktree /workspace/notes/libs/keripy-docstring-koming-001',
+    'HEAD def456',
+    'branch refs/heads/chore/docstrings-koming',
+    '',
+  ].join('\n'));
+
+  assert.deepEqual(entries, [
+    {
+      worktreePath: '/workspace/notes/libs/keripy',
+      head: 'abc123',
+      branch: 'refs/heads/main',
+    },
+    {
+      worktreePath: '/workspace/notes/libs/keripy-docstring-koming-001',
+      head: 'def456',
+      branch: 'refs/heads/chore/docstrings-koming',
+    },
+  ]);
+});
+
+test('discoverWorkspaceProjectDecisions discovers a synthetic worktree project for a known canonical project', async () => {
+  const decisions = await discoverWorkspaceProjectDecisions(
+    [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+    ],
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: ['01-keri-notes'],
+      knownProjects: [configuredProject],
+    },
+    {
+      exists: async (filePath) => filePath === '/workspace/notes/libs/keripy-docstring-koming-001/docs/conf.py',
+      readText: async () => undefined,
+      listGitWorktrees: async () => [
+        'worktree /workspace/notes/libs/keripy',
+        'HEAD abc123',
+        'branch refs/heads/main',
+        '',
+        'worktree /workspace/notes/libs/keripy-docstring-koming-001',
+        'HEAD def456',
+        'branch refs/heads/chore/docstrings-koming',
+        '',
+      ].join('\n'),
+    },
+  );
+
+  const worktreeProject = decisions.find((decision) => decision.project?.id === 'keripy@keripy-docstring-koming-001')?.project;
+  assert.ok(worktreeProject);
+  assert.equal(worktreeProject?.baseProjectId, 'keripy');
+  assert.equal(worktreeProject?.label, 'keripy-docstring-koming-001');
+  assert.equal(worktreeProject?.sourceRootPath, '/workspace/notes/libs/keripy-docstring-koming-001');
+  assert.equal(worktreeProject?.sourceWorkspaceFolder, 'keripy-docstring-koming-001');
+});
+
+test('discoverWorkspaceProjectDecisions skips the canonical worktree root duplicate', async () => {
+  const decisions = await discoverWorkspaceProjectDecisions(
+    [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+    ],
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: ['01-keri-notes'],
+      knownProjects: [configuredProject],
+    },
+    {
+      exists: async () => true,
+      readText: async () => undefined,
+      listGitWorktrees: async () => [
+        'worktree /workspace/notes/libs/keripy',
+        'HEAD abc123',
+        'branch refs/heads/main',
+        '',
+      ].join('\n'),
+    },
+  );
+
+  assert.equal(decisions.some((decision) => decision.project?.id === 'keripy@keripy'), false);
+});
+
+test('discoverWorkspaceProjectDecisions ignores worktrees without Sphinx markers', async () => {
+  const decisions = await discoverWorkspaceProjectDecisions(
+    [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+    ],
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: ['01-keri-notes'],
+      knownProjects: [configuredProject],
+    },
+    {
+      exists: async () => false,
+      readText: async () => undefined,
+      listGitWorktrees: async () => [
+        'worktree /workspace/notes/libs/keripy-docstring-koming-001',
+        'HEAD def456',
+        'branch refs/heads/chore/docstrings-koming',
+        '',
+      ].join('\n'),
+    },
+  );
+
+  assert.equal(decisions.some((decision) => decision.project?.baseProjectId === 'keripy'), false);
+});
+
+test('discoverWorkspaceProjectDecisions rejects worktree paths outside the trusted workspace root', async () => {
+  const decisions = await discoverWorkspaceProjectDecisions(
+    [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+    ],
+    {
+      includeLowConfidence: false,
+      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      excludeWorkspaceFolderNames: ['01-keri-notes'],
+      knownProjects: [configuredProject],
+    },
+    {
+      exists: async () => true,
+      readText: async () => undefined,
+      listGitWorktrees: async () => [
+        'worktree /tmp/keripy-docstring-koming-001',
+        'HEAD def456',
+        'branch refs/heads/chore/docstrings-koming',
+        '',
+      ].join('\n'),
+    },
+  );
+
+  assert.equal(decisions.some((decision) => decision.project?.id === 'keripy@keripy-docstring-koming-001'), false);
+});
+
 test('selectInventoryCandidate prefers issues.vscode.json over issues.json for matching projects', () => {
   const result = selectInventoryCandidate(
     configuredProject,
@@ -1851,6 +1998,70 @@ test('findOwningProjectForPath resolves the matching source project', () => {
   );
 
   assert.equal(project?.id, 'keripy');
+});
+
+test('findOwningProjectForPath resolves a saved file under a worktree to the synthetic project', () => {
+  const project = findOwningProjectForPath(
+    '/workspace/notes/libs/keripy-docstring-koming-001/src/keri/db/koming.py',
+    [
+      configuredProject,
+      {
+        ...configuredProject,
+        id: 'keripy@keripy-docstring-koming-001',
+        baseProjectId: 'keripy',
+        label: 'keripy-docstring-koming-001',
+        sourceWorkspaceFolder: 'keripy-docstring-koming-001',
+        sourceRootPath: '/workspace/notes/libs/keripy-docstring-koming-001',
+      },
+    ],
+    [{ name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' }],
+  );
+
+  assert.equal(project?.id, 'keripy@keripy-docstring-koming-001');
+});
+
+test('findOwningProjectForPath keeps canonical saved-file ownership unchanged', () => {
+  const project = findOwningProjectForPath(
+    '/workspace/notes/libs/keripy/src/keri/db/koming.py',
+    [
+      {
+        ...configuredProject,
+        sourceRootPath: resolveProjectSourceRoot(configuredProject, [
+          { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+        ]),
+      },
+      {
+        ...configuredProject,
+        id: 'keripy@keripy-docstring-koming-001',
+        baseProjectId: 'keripy',
+        label: 'keripy-docstring-koming-001',
+        sourceWorkspaceFolder: 'keripy-docstring-koming-001',
+        sourceRootPath: '/workspace/notes/libs/keripy-docstring-koming-001',
+      },
+    ],
+    [{ name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' }],
+  );
+
+  assert.equal(project?.id, 'keripy');
+});
+
+test('mergeProjects keeps base and worktree projects distinct by project id', () => {
+  const merged = mergeProjects(
+    [configuredProject],
+    [
+      {
+        ...configuredProject,
+        id: 'keripy@keripy-docstring-koming-001',
+        baseProjectId: 'keripy',
+        label: 'keripy-docstring-koming-001',
+        sourceWorkspaceFolder: 'keripy-docstring-koming-001',
+        sourceRootPath: '/workspace/notes/libs/keripy-docstring-koming-001',
+        origin: 'discovered',
+      },
+    ],
+  );
+
+  assert.deepEqual(merged.map((project) => project.id), ['keripy', 'keripy@keripy-docstring-koming-001']);
 });
 
 test('getRefreshOnSaveDecision blocks refresh-on-save when disabled', () => {

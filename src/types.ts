@@ -108,8 +108,10 @@ export interface DiagnosticsContract {
 
 export interface ConfiguredProject {
   id: string;
+  baseProjectId?: string;
   label?: string;
   sourceWorkspaceFolder: string;
+  sourceRootPath?: string;
   inventoryWorkspaceFolder: string;
   repoRoot?: string;
   docsRoot?: string;

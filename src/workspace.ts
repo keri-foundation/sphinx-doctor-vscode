@@ -30,6 +30,22 @@ export function findWorkspaceFolderByName(
   return workspaceFolders.find((folder) => folder.name === folderName);
 }
 
+export function resolveProjectSourceRoot(
+  project: Pick<ConfiguredProject, 'sourceRootPath' | 'sourceWorkspaceFolder' | 'repoRoot'>,
+  workspaceFolders: WorkspaceFolderInfo[],
+): string | undefined {
+  if (typeof project.sourceRootPath === 'string' && path.isAbsolute(project.sourceRootPath)) {
+    return path.resolve(project.sourceRootPath);
+  }
+
+  const sourceFolder = findWorkspaceFolderByName(workspaceFolders, project.sourceWorkspaceFolder);
+  if (!sourceFolder) {
+    return undefined;
+  }
+
+  return path.resolve(sourceFolder.fsPath, project.repoRoot ?? '.');
+}
+
 function directFileUriPath(issue: DiagnosticsIssue): string | undefined {
   const value = typeof issue.fileUri === 'string' ? issue.fileUri : typeof issue.uri === 'string' ? issue.uri : undefined;
   if (!value || !value.startsWith('file:')) {

@@ -27,7 +27,7 @@ import {
 import { SphinxDoctorLogger } from './log';
 import { DiagnosticsPublicationIndex } from './publicationIndex';
 import { publishDiagnosticsBatch, PublishBatchEntry, PublishResult } from './publishDiagnostics';
-import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
+import { discoverWorkspaceProjectDecisions, listGitWorktreesPorcelain, mergeProjects } from './projectDiscovery';
 import { SELF_TEST_STATUS_TEXT } from './selfTest';
 import {
   ConfiguredProject,
@@ -389,6 +389,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
             includeLowConfidence: config.discoveryIncludeLowConfidence,
             inventoryWorkspaceFolderNames: config.discoveryInventoryWorkspaceFolderNames,
             excludeWorkspaceFolderNames: config.discoveryExcludeWorkspaceFolders,
+            knownProjects: config.projects,
           },
           {
             exists: async (filePath) => {
@@ -407,6 +408,8 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
                 return undefined;
               }
             },
+            listGitWorktrees:
+              vscode.workspace.isTrusted === true ? listGitWorktreesPorcelain : undefined,
           },
         )
       : [];
@@ -1000,6 +1003,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
             includeLowConfidence: config.discoveryIncludeLowConfidence,
             inventoryWorkspaceFolderNames: config.discoveryInventoryWorkspaceFolderNames,
             excludeWorkspaceFolderNames: config.discoveryExcludeWorkspaceFolders,
+            knownProjects: config.projects,
           },
           {
             exists: async (filePath) => {
@@ -1018,6 +1022,8 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
                 return undefined;
               }
             },
+            listGitWorktrees:
+              vscode.workspace.isTrusted === true ? listGitWorktreesPorcelain : undefined,
           },
         )
       : [];

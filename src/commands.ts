@@ -39,6 +39,9 @@ import { SphinxDoctorLogger } from './log';
 import { computeDiagnosticsAccounting, publishDiagnostics, PublishLogger } from './publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
 import {
+  listGitWorktreesPorcelain,
+} from './projectDiscovery';
+import {
   buildSelfTestStatusTooltip,
   clearPublishedDiagnostics,
   createSelfTestDiagnosticSpec,
@@ -524,10 +527,13 @@ async function discoverProjectsFromWorkspace(
       includeLowConfidence: config.discoveryIncludeLowConfidence,
       inventoryWorkspaceFolderNames: config.discoveryInventoryWorkspaceFolderNames,
       excludeWorkspaceFolderNames: config.discoveryExcludeWorkspaceFolders,
+      knownProjects: config.projects,
     },
     {
       exists: projectDiscoveryProbeExists,
       readText: projectDiscoveryProbeReadText,
+      listGitWorktrees:
+        vscode.workspace.isTrusted === true ? listGitWorktreesPorcelain : undefined,
     },
   );
 

@@ -1,4 +1,6 @@
+import { execFile } from 'node:child_process';
 import path from 'node:path';
+import { promisify } from 'node:util';
 
 import {
   ConfiguredProject,
@@ -6,6 +8,7 @@ import {
   InventorySearchTarget,
   WorkspaceFolderInfo,
 } from './types';
+import { resolveProjectSourceRoot } from './workspace';
 
 export interface DiscoverySnapshot {
   existingPaths: Set<string>;
@@ -17,6 +20,7 @@ export interface DiscoveryOptions {
   inventoryWorkspaceFolderNames: string[];
   excludeWorkspaceFolderNames: string[];
   availableWorkspaceFolderNames: string[];
+  knownProjects?: ConfiguredProject[];
 }
 
 export interface DiscoveryDecision {
@@ -29,7 +33,16 @@ export interface DiscoveryDecision {
 export interface DiscoveryProbe {
   exists(filePath: string): Promise<boolean>;
   readText(filePath: string): Promise<string | undefined>;
+  listGitWorktrees?(repoRoot: string): Promise<string | undefined>;
 }
+
+export interface GitWorktreeEntry {
+  worktreePath: string;
+  head?: string;
+  branch?: string;
+}
+
+const execFileAsync = promisify(execFile);
 
 const HIGH_CONFIDENCE_MARKERS = [
   'docs/conf.py',
@@ -38,6 +51,8 @@ const HIGH_CONFIDENCE_MARKERS = [
   'source/conf.py',
   'conf.py',
 ];
+
+const GIT_WORKTREE_MARKERS = ['docs/conf.py', 'docs/source/conf.py'];
 
 export function buildDiscoveryProbePaths(): string[] {
   return [...HIGH_CONFIDENCE_MARKERS];
@@ -64,6 +79,20 @@ function labelFromWorkspaceFolderName(name: string): string {
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values.filter((value) => value.length > 0))];
+}
+
+function normalizeAbsolutePath(value: string): string {
+  return path.resolve(value);
+}
+
+function isWithinRoot(candidatePath: string, rootPath: string): boolean {
+  const normalizedCandidate = normalizeAbsolutePath(candidatePath);
+  const normalizedRoot = normalizeAbsolutePath(rootPath);
+
+  return (
+    normalizedCandidate === normalizedRoot ||
+    normalizedCandidate.startsWith(`${normalizedRoot}${path.sep}`)
+  );
 }
 
 function buildTmpInventoryGlobs(projectId: string, sourceBasename: string): string[] {
@@ -131,6 +160,7 @@ function buildDiscoveredProject(
     id: projectId,
     label: labelFromWorkspaceFolderName(folder.name),
     sourceWorkspaceFolder: folder.name,
+    sourceRootPath: path.resolve(folder.fsPath),
     inventoryWorkspaceFolder: primaryInventoryTarget.workspaceFolderName,
     repoRoot: '.',
     docsRoot,
@@ -142,6 +172,197 @@ function buildDiscoveredProject(
     discoveryReasons: reasons,
     origin: 'discovered',
   };
+}
+
+function preferredInventoryWorkspaceFolderName(
+  project: ConfiguredProject,
+  options: DiscoveryOptions,
+): string {
+  if (options.availableWorkspaceFolderNames.includes(project.inventoryWorkspaceFolder)) {
+    return project.inventoryWorkspaceFolder;
+  }
+
+  return options.inventoryWorkspaceFolderNames.find((name) =>
+    options.availableWorkspaceFolderNames.includes(name),
+  ) ?? project.inventoryWorkspaceFolder;
+}
+
+function buildSyntheticWorktreeProject(
+  baseProject: ConfiguredProject,
+  worktreePath: string,
+  marker: string,
+  options: DiscoveryOptions,
+): ConfiguredProject {
+  const worktreeName = path.basename(worktreePath);
+  const projectId = `${baseProject.id}@${worktreeName}`;
+  const inventoryWorkspaceFolder = preferredInventoryWorkspaceFolderName(baseProject, options);
+
+  return {
+    id: projectId,
+    baseProjectId: baseProject.id,
+    label: worktreeName,
+    sourceWorkspaceFolder: worktreeName,
+    sourceRootPath: normalizeAbsolutePath(worktreePath),
+    inventoryWorkspaceFolder,
+    repoRoot: '.',
+    docsRoot: docsRootFromMarker(marker),
+    inventorySearchGlobs: buildTmpInventoryGlobs(projectId, slugify(worktreeName)),
+    preferredInventoryFiles: [...baseProject.preferredInventoryFiles],
+    mirrorRoot: '.sphinx-diagnostics',
+    inventorySearchTargets: [
+      {
+        workspaceFolderName: inventoryWorkspaceFolder,
+        globs: buildTmpInventoryGlobs(projectId, slugify(worktreeName)),
+        reason: 'shared inventory tmp root',
+      },
+    ],
+    discoveryConfidence: 'high',
+    discoveryReasons: [
+      `git worktree of ${baseProject.id}`,
+      `high-confidence marker: ${marker}`,
+    ],
+    origin: 'discovered',
+  };
+}
+
+function resolveTrustedWorkspaceRoot(
+  workspaceFolders: WorkspaceFolderInfo[],
+  options: DiscoveryOptions,
+): string | undefined {
+  for (const folderName of options.inventoryWorkspaceFolderNames) {
+    const folder = workspaceFolders.find((candidate) => candidate.name === folderName);
+    if (folder) {
+      return normalizeAbsolutePath(folder.fsPath);
+    }
+  }
+
+  return undefined;
+}
+
+async function discoverGitWorktreeProjects(
+  baseProjects: ConfiguredProject[],
+  workspaceFolders: WorkspaceFolderInfo[],
+  options: DiscoveryOptions,
+  probe: DiscoveryProbe,
+): Promise<DiscoveryDecision[]> {
+  if (!probe.listGitWorktrees) {
+    return [];
+  }
+
+  const trustedWorkspaceRoot = resolveTrustedWorkspaceRoot(workspaceFolders, options);
+  if (!trustedWorkspaceRoot) {
+    return [];
+  }
+
+  const decisions: DiscoveryDecision[] = [];
+  const seenProjectIds = new Set<string>();
+
+  for (const baseProject of baseProjects) {
+    const canonicalSourceRoot = resolveProjectSourceRoot(baseProject, workspaceFolders);
+    if (!canonicalSourceRoot) {
+      continue;
+    }
+
+    const listing = await probe.listGitWorktrees(canonicalSourceRoot);
+    if (!listing) {
+      continue;
+    }
+
+    for (const entry of parseGitWorktreeListPorcelain(listing)) {
+      const worktreePath = normalizeAbsolutePath(entry.worktreePath);
+      if (worktreePath === normalizeAbsolutePath(canonicalSourceRoot)) {
+        continue;
+      }
+
+      if (!isWithinRoot(worktreePath, trustedWorkspaceRoot)) {
+        continue;
+      }
+
+      let matchedMarker: string | undefined;
+      for (const marker of GIT_WORKTREE_MARKERS) {
+        if (await probe.exists(path.join(worktreePath, marker))) {
+          matchedMarker = marker;
+          break;
+        }
+      }
+
+      if (!matchedMarker) {
+        continue;
+      }
+
+      const project = buildSyntheticWorktreeProject(baseProject, worktreePath, matchedMarker, options);
+      if (seenProjectIds.has(project.id)) {
+        continue;
+      }
+
+      seenProjectIds.add(project.id);
+      decisions.push({
+        workspaceFolderName: path.basename(worktreePath),
+        outcome: 'discovered',
+        reason: (project.discoveryReasons ?? []).join('; '),
+        project,
+      });
+    }
+  }
+
+  return decisions;
+}
+
+export function parseGitWorktreeListPorcelain(text: string): GitWorktreeEntry[] {
+  const entries: GitWorktreeEntry[] = [];
+  let current: GitWorktreeEntry | undefined;
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+    if (line.length === 0) {
+      if (current?.worktreePath) {
+        entries.push(current);
+      }
+      current = undefined;
+      continue;
+    }
+
+    if (line.startsWith('worktree ')) {
+      if (current?.worktreePath) {
+        entries.push(current);
+      }
+      current = {
+        worktreePath: line.slice('worktree '.length),
+      };
+      continue;
+    }
+
+    if (!current) {
+      continue;
+    }
+
+    if (line.startsWith('HEAD ')) {
+      current.head = line.slice('HEAD '.length);
+      continue;
+    }
+
+    if (line.startsWith('branch ')) {
+      current.branch = line.slice('branch '.length);
+    }
+  }
+
+  if (current?.worktreePath) {
+    entries.push(current);
+  }
+
+  return entries;
+}
+
+export async function listGitWorktreesPorcelain(repoRoot: string): Promise<string | undefined> {
+  try {
+    const result = await execFileAsync('git', ['-C', repoRoot, 'worktree', 'list', '--porcelain'], {
+      timeout: 5000,
+      maxBuffer: 1024 * 1024,
+    });
+    return result.stdout;
+  } catch {
+    return undefined;
+  }
 }
 
 export function detectProjectFromSnapshot(
@@ -223,6 +444,19 @@ export async function discoverWorkspaceProjectDecisions(
     });
   }
 
+  const discoveredCanonicalProjects = decisions.flatMap((decision) =>
+    decision.project ? [decision.project] : [],
+  );
+  const knownProjects = mergeProjects(options.knownProjects ?? [], discoveredCanonicalProjects);
+  const worktreeDecisions = await discoverGitWorktreeProjects(
+    knownProjects,
+    workspaceFolders,
+    mergedOptions,
+    probe,
+  );
+
+  decisions.push(...worktreeDecisions);
+
   return decisions;
 }
 
@@ -248,6 +482,13 @@ export function mergeProjects(
 
   for (const project of discoveredProjects) {
     if (explicitIds.has(project.id) || explicitSourceFolders.has(project.sourceWorkspaceFolder)) {
+      const duplicate = merged.find(
+        (existing) =>
+          existing.id === project.id || existing.sourceWorkspaceFolder === project.sourceWorkspaceFolder,
+      );
+      if (duplicate && !duplicate.sourceRootPath && project.sourceRootPath) {
+        duplicate.sourceRootPath = project.sourceRootPath;
+      }
       continue;
     }
     merged.push(project);

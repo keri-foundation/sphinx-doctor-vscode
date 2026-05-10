@@ -8,7 +8,7 @@ import {
   WatchModeSummary,
   WorkspaceFolderInfo,
 } from './types';
-import { findWorkspaceFolderByName } from './workspace';
+import { resolveProjectSourceRoot } from './workspace';
 
 export interface DebounceScheduler {
   setTimeout(callback: () => void, delayMs: number): unknown;
@@ -136,12 +136,11 @@ export function findOwningProjectForPath(
 ): ConfiguredProject | undefined {
   const matches = projects
     .map((project) => {
-      const sourceFolder = findWorkspaceFolderByName(workspaceFolders, project.sourceWorkspaceFolder);
-      if (!sourceFolder) {
+      const sourceRoot = resolveProjectSourceRoot(project, workspaceFolders);
+      if (!sourceRoot) {
         return undefined;
       }
 
-      const sourceRoot = path.resolve(sourceFolder.fsPath, project.repoRoot ?? '.');
       if (!isWithinRoot(filePath, sourceRoot)) {
         return undefined;
       }
