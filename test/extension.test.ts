@@ -14,6 +14,7 @@ import {
   getRefreshPermission,
   inferProjectRefreshConfig,
 } from '../src/refreshRunner';
+import { DiagnosticsPublicationIndex } from '../src/publicationIndex';
 import {
   buildLoadAllDiagnosticsStatusMessage,
   loadAllDiscoveredDiagnostics,
@@ -706,6 +707,121 @@ test('clearPublishedDiagnostics clears self-test diagnostics from the collection
 
   clearPublishedDiagnostics(collection);
   assert.equal(collection.cleared, true);
+});
+
+test('publication index full replacement clears previous projects and records new targets', () => {
+  const operations: string[] = [];
+  const index = new DiagnosticsPublicationIndex<string>();
+  const collection = {
+    clear() {
+      operations.push('clear');
+    },
+    delete(target: string) {
+      operations.push(`delete:${target}`);
+    },
+  };
+
+  index.replaceAll(
+    collection,
+    new Map([
+      ['keripy', new Map([['file:///a1.py', 'file:///a1.py']])],
+      ['hio', new Map([['file:///b1.py', 'file:///b1.py']])],
+    ]),
+  );
+  index.replaceAll(
+    collection,
+    new Map([['keripy', new Map([['file:///a2.py', 'file:///a2.py']])]]),
+  );
+
+  assert.deepEqual(operations, ['clear', 'clear']);
+  assert.deepEqual(index.getPublishedTargetKeys('keripy'), ['file:///a2.py']);
+  assert.deepEqual(index.getPublishedTargetKeys('hio'), []);
+});
+
+test('publication index project replacement leaves other projects untouched', () => {
+  const operations: string[] = [];
+  const index = new DiagnosticsPublicationIndex<string>();
+  const collection = {
+    clear() {
+      operations.push('clear');
+    },
+    delete(target: string) {
+      operations.push(`delete:${target}`);
+    },
+  };
+
+  index.replaceAll(
+    collection,
+    new Map([
+      ['keripy', new Map([['file:///a1.py', 'file:///a1.py']])],
+      ['hio', new Map([['file:///b1.py', 'file:///b1.py']])],
+    ]),
+  );
+
+  operations.length = 0;
+  index.replaceProjects(
+    collection,
+    ['keripy'],
+    new Map([['keripy', new Map([['file:///a2.py', 'file:///a2.py']])]]),
+  );
+
+  assert.deepEqual(operations, ['delete:file:///a1.py']);
+  assert.deepEqual(index.getPublishedTargetKeys('keripy'), ['file:///a2.py']);
+  assert.deepEqual(index.getPublishedTargetKeys('hio'), ['file:///b1.py']);
+});
+
+test('publication index deletes stale project targets that are no longer published', () => {
+  const operations: string[] = [];
+  const index = new DiagnosticsPublicationIndex<string>();
+  const collection = {
+    clear() {
+      operations.push('clear');
+    },
+    delete(target: string) {
+      operations.push(`delete:${target}`);
+    },
+  };
+
+  index.replaceAll(
+    collection,
+    new Map([
+      ['keripy', new Map([
+        ['file:///a1.py', 'file:///a1.py'],
+        ['file:///a2.py', 'file:///a2.py'],
+      ])],
+      ['witness-hk', new Map([['file:///w1.py', 'file:///w1.py']])],
+    ]),
+  );
+
+  operations.length = 0;
+  index.replaceProjects(
+    collection,
+    ['keripy'],
+    new Map([['keripy', new Map([['file:///a1.py', 'file:///a1.py']])]]),
+  );
+
+  assert.deepEqual(operations, ['delete:file:///a1.py', 'delete:file:///a2.py']);
+  assert.deepEqual(index.getPublishedTargetKeys('keripy'), ['file:///a1.py']);
+  assert.deepEqual(index.getPublishedTargetKeys('witness-hk'), ['file:///w1.py']);
+});
+
+test('publication index does not create fake retained-only targets', () => {
+  const index = new DiagnosticsPublicationIndex<string>();
+  const collection = {
+    clear() {},
+    delete() {},
+  };
+
+  index.replaceAll(
+    collection,
+    new Map([
+      ['witness-hk', new Map()],
+      ['hio', new Map([['file:///h1.py', 'file:///h1.py']])],
+    ]),
+  );
+
+  assert.deepEqual(index.getPublishedTargetKeys('witness-hk'), []);
+  assert.deepEqual(index.getPublishedTargetKeys('hio'), ['file:///h1.py']);
 });
 
 test('self-test status text and tooltip stay explicit for visibility debugging', () => {

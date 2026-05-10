@@ -44,6 +44,7 @@ import {
   SELF_TEST_FALLBACK_RELATIVE_PATH,
   SELF_TEST_STATUS_TEXT,
 } from './selfTest';
+import { DiagnosticsPublicationIndex } from './publicationIndex';
 import { ConfiguredProject, LastLoadedDiagnosticsState, WorkspaceFolderInfo } from './types';
 import { SphinxDoctorWatchMode } from './watchMode';
 import {
@@ -57,9 +58,12 @@ interface CommandDependencies {
   collection: vscode.DiagnosticCollection;
   logger: SphinxDoctorLogger;
   watchMode?: SphinxDoctorWatchMode;
+  publicationIndex: DiagnosticsPublicationIndex<vscode.Uri>;
 }
 
 interface LoadOptions {
+  replaceMode?: 'full' | 'project';
+  projectKey?: string;
   defaultSourceWorkspaceFolderOverride?: string;
   defaultRepoRootOverride?: string;
   fixtureSourceRoot?: string;
@@ -155,6 +159,9 @@ async function loadAndPublish(
   const result = publishDiagnostics(dependencies.collection, contract, {
     workspaceFolders: vscode.workspace.workspaceFolders,
     diagnosticMode: config.diagnosticsMode,
+    replaceMode: options.replaceMode,
+    projectKey: options.projectKey,
+    publicationIndex: dependencies.publicationIndex,
     defaultSourceWorkspaceFolder:
       options.defaultSourceWorkspaceFolderOverride ?? config.defaultSourceWorkspaceFolder,
     defaultRepoRoot: options.defaultRepoRootOverride,
@@ -563,6 +570,8 @@ async function loadSelectedProjectDiagnostics(
   selected: SelectedProjectDiagnostics,
 ): Promise<void> {
   await loadAndPublish(context, selected.candidate.uri, dependencies, {
+    replaceMode: 'project',
+    projectKey: selected.project.id,
     defaultSourceWorkspaceFolderOverride: selected.project.sourceWorkspaceFolder,
     defaultRepoRootOverride: selected.project.repoRoot,
   });
@@ -704,6 +713,8 @@ async function runRefreshAndLoadProjectDiagnostics(
       vscode.Uri.file(enrichmentResult.plan.latestOutputPath),
       dependencies,
       {
+        replaceMode: 'project',
+        projectKey: project.id,
         defaultSourceWorkspaceFolderOverride: project.sourceWorkspaceFolder,
         defaultRepoRootOverride: project.repoRoot,
       },
@@ -785,6 +796,8 @@ async function loadOrEnrichProjectDiagnostics(
     );
 
     await loadAndPublish(context, vscode.Uri.file(runResult.plan.archiveOutputPath), dependencies, {
+      replaceMode: 'project',
+      projectKey: project.id,
       defaultSourceWorkspaceFolderOverride: project.sourceWorkspaceFolder,
       defaultRepoRootOverride: project.repoRoot,
     });
@@ -1032,6 +1045,7 @@ export function registerCommands(
     vscode.commands.registerCommand('sphinxDoctor.clearDiagnostics', async () => {
       await runSafely(dependencies.logger, 'Clear Diagnostics', async () => {
         clearPublishedDiagnostics(dependencies.collection);
+        dependencies.publicationIndex.clear();
         dependencies.watchMode?.noteManualClear();
         dependencies.logger.info('Cleared Sphinx Doctor diagnostics.');
         void vscode.window.showInformationMessage('Sphinx Doctor diagnostics cleared.');

@@ -16,9 +16,23 @@ import { resolveIssueFilePath } from './workspace';
 
 export type PublishLogger = Pick<SphinxDoctorLogger, 'debug' | 'info' | 'warn' | 'error'>;
 
+type PublishedTargetsByProject = Map<string, Map<string, vscode.Uri>>;
+
+interface PublicationIndexLike {
+  replaceAll(collection: vscode.DiagnosticCollection, nextTargetsByProject: PublishedTargetsByProject): void;
+  replaceProjects(
+    collection: vscode.DiagnosticCollection,
+    projectKeys: Iterable<string>,
+    nextTargetsByProject: PublishedTargetsByProject,
+  ): void;
+}
+
 export interface PublishOptions {
   workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
   diagnosticMode: DiagnosticMode;
+  replaceMode?: 'full' | 'project';
+  projectKey?: string;
+  publicationIndex?: PublicationIndexLike;
   defaultSourceWorkspaceFolder?: string;
   defaultRepoRoot?: string;
   fixtureSourceRoot?: string;
@@ -38,6 +52,7 @@ export interface PublishResult {
 
 export interface PublishBatchEntry {
   contract: DiagnosticsContract;
+  projectKey?: string;
   defaultSourceWorkspaceFolder?: string;
   defaultRepoRoot?: string;
   fixtureSourceRoot?: string;
@@ -47,6 +62,10 @@ export interface PublishBatchEntry {
 interface CollectedDiagnostics {
   grouped: Map<string, { uri: vscode.Uri; diagnostics: vscode.Diagnostic[] }>;
   result: PublishResult;
+}
+
+function resolveProjectKey(entry: PublishBatchEntry): string | undefined {
+  return entry.projectKey ?? entry.contract.workspace.sourceWorkspaceFolder ?? entry.defaultSourceWorkspaceFolder;
 }
 
 function mapSeverity(severity: string): vscode.DiagnosticSeverity {
@@ -176,9 +195,13 @@ export function computeDiagnosticsAccounting(
 export function publishDiagnosticsBatch(
   collection: vscode.DiagnosticCollection,
   entries: PublishBatchEntry[],
-  options: Pick<PublishOptions, 'workspaceFolders' | 'diagnosticMode' | 'logger'>,
+  options: Pick<
+    PublishOptions,
+    'workspaceFolders' | 'diagnosticMode' | 'logger' | 'replaceMode' | 'publicationIndex'
+  >,
 ): PublishResult {
   const grouped = new Map<string, { uri: vscode.Uri; diagnostics: vscode.Diagnostic[] }>();
+  const publishedTargetsByProject = new Map<string, Map<string, vscode.Uri>>();
   let issueCount = 0;
   let publishableBeforeFilter = 0;
   let publishedDiagnostics = 0;
@@ -186,8 +209,8 @@ export function publishDiagnosticsBatch(
   let targetUriCount = 0;
   let skippedIssues = 0;
   let resolutionFailures = 0;
-
-  collection.clear();
+  const replaceMode = options.replaceMode ?? 'full';
+  const affectedProjectKeys = new Set<string>();
 
   for (const entry of entries) {
     const collected = collectDiagnostics(entry.contract, {
@@ -208,6 +231,18 @@ export function publishDiagnosticsBatch(
     skippedIssues += collected.result.skippedIssues;
     resolutionFailures += collected.result.resolutionFailures;
 
+    const projectKey = resolveProjectKey(entry);
+    if (projectKey) {
+      affectedProjectKeys.add(projectKey);
+      const existingTargets = publishedTargetsByProject.get(projectKey) ?? new Map<string, vscode.Uri>();
+      for (const entryGroup of collected.grouped.values()) {
+        existingTargets.set(entryGroup.uri.toString(), entryGroup.uri);
+      }
+      publishedTargetsByProject.set(projectKey, existingTargets);
+    } else if (replaceMode === 'project') {
+      throw new Error('Project replacement publish requires a stable project key.');
+    }
+
     for (const [groupKey, entryGroup] of collected.grouped.entries()) {
       const existing = grouped.get(groupKey);
       if (existing) {
@@ -216,6 +251,18 @@ export function publishDiagnosticsBatch(
         grouped.set(groupKey, entryGroup);
       }
     }
+  }
+
+  if (replaceMode === 'full') {
+    if (options.publicationIndex) {
+      options.publicationIndex.replaceAll(collection, publishedTargetsByProject);
+    } else {
+      collection.clear();
+    }
+  } else if (options.publicationIndex) {
+    options.publicationIndex.replaceProjects(collection, affectedProjectKeys, publishedTargetsByProject);
+  } else {
+    throw new Error('Project replacement publish requires a publication index.');
   }
 
   for (const entry of grouped.values()) {
@@ -243,6 +290,7 @@ export function publishDiagnostics(
     [
       {
         contract,
+        projectKey: options.projectKey,
         defaultSourceWorkspaceFolder: options.defaultSourceWorkspaceFolder,
         defaultRepoRoot: options.defaultRepoRoot,
         fixtureSourceRoot: options.fixtureSourceRoot,

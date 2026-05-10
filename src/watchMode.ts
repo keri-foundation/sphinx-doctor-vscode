@@ -22,6 +22,7 @@ import {
   loadDiagnosticsFromPath,
 } from './loadDiagnostics';
 import { SphinxDoctorLogger } from './log';
+import { DiagnosticsPublicationIndex } from './publicationIndex';
 import { publishDiagnosticsBatch, PublishBatchEntry, PublishResult } from './publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
 import { SELF_TEST_STATUS_TEXT } from './selfTest';
@@ -216,6 +217,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     private readonly context: vscode.ExtensionContext,
     private readonly collection: vscode.DiagnosticCollection,
     private readonly logger: SphinxDoctorLogger,
+    private readonly publicationIndex: DiagnosticsPublicationIndex<vscode.Uri>,
   ) {
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     this.statusItem.command = 'sphinxDoctor.showStatus';
@@ -280,7 +282,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     this.resetRefreshTrigger(config.watchDebounceMs);
     if (!config.watchEnabled) {
       this.disposeWatchers();
-      this.collection.clear();
+      this.publicationIndex.clear(this.collection);
       this.lastRefreshReason = reason;
       this.lastError = undefined;
       this.lastLoadedDiagnosticsFiles = [];
@@ -334,7 +336,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
     if (!hasOpenWorkspaceFolders(workspaceFolders)) {
       this.disposeWatchers();
-      this.collection.clear();
+      this.publicationIndex.clear(this.collection);
       const summary = buildWatchModeSummary({
         projectCount: 0,
         loadedProjectCount: 0,
@@ -487,10 +489,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       publishResult = publishDiagnosticsBatch(this.collection, entries, {
         workspaceFolders: vscode.workspace.workspaceFolders,
         diagnosticMode: config.diagnosticsMode,
+        replaceMode: 'full',
+        publicationIndex: this.publicationIndex,
         logger: this.logger,
       });
     } else {
-      this.collection.clear();
+      this.publicationIndex.clear(this.collection);
     }
 
     this.lastLoadedDiagnosticsFiles = entries.map((entry) => entry.loadedPath);
@@ -703,6 +707,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       );
       return {
         project,
+        projectKey: project.id,
         contract,
         loadedPath: selected.candidate.filePath,
         loadedIssueCount: contract.issues.length,
@@ -751,6 +756,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       );
       return {
         project,
+        projectKey: project.id,
         contract,
         loadedPath: result.plan.latestOutputPath,
         loadedIssueCount: contract.issues.length,
