@@ -132,6 +132,8 @@ The command refuses to bind stale inventory files from older runs, and it keeps 
 
 If a refresh finds a much broader diagnostics universe than the current baseline, Sphinx Doctor preserves the new run archive for inspection but does not silently replace `.sphinx-diagnostics/latest.json`.
 
+When the current diagnostics baseline is a focused single-category lane, refresh preserves that category by passing the same category filter back into the inventory runner before the parity guard compares the new run.
+
 ## Coverage Model
 
 - `02-keripy` is the current active, refresh-capable repo because it has a verified Sphinx marker, a working docs Python at `.venv-docs/bin/python`, and a valid inventory-runner path through `01-keri-notes/Devtools/sphinx/run_sphinx_inventory.sh`.

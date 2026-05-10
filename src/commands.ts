@@ -29,6 +29,7 @@ import {
 } from './enrichmentRunner';
 import {
   buildRefreshRunPlan,
+  inferRefreshScopeFromContract,
   filterRecentInventoryCandidates,
   getRefreshPermission,
   inferProjectRefreshConfig,
@@ -612,6 +613,43 @@ function resolveProjectLatestDiagnosticsPath(
   );
 }
 
+interface ActiveRefreshBaseline {
+  filePath: string;
+  contract?: import('./types').DiagnosticsContract;
+}
+
+async function resolveActiveRefreshBaseline(
+  context: vscode.ExtensionContext,
+  project: ConfiguredProject,
+  workspaceFolders: WorkspaceFolderInfo[],
+): Promise<ActiveRefreshBaseline> {
+  const latestOutputPath = resolveProjectLatestDiagnosticsPath(project, workspaceFolders);
+  const lastLoaded = readLastLoadedDiagnosticsState(context);
+  if (lastLoaded) {
+    try {
+      const diagnosticsUri = vscode.Uri.parse(lastLoaded.fileUri);
+      const contract = await loadDiagnosticsFromPath(diagnosticsUri.fsPath);
+      if (contract.workspace.sourceWorkspaceFolder === project.sourceWorkspaceFolder) {
+        return {
+          filePath: diagnosticsUri.fsPath,
+          contract,
+        };
+      }
+    } catch {
+      // Fall back to the repo mirror latest.json baseline.
+    }
+  }
+
+  try {
+    return {
+      filePath: latestOutputPath,
+      contract: await loadDiagnosticsFromPath(latestOutputPath),
+    };
+  } catch {
+    return { filePath: latestOutputPath };
+  }
+}
+
 async function runRefreshAndLoadProjectDiagnostics(
   context: vscode.ExtensionContext,
   dependencies: CommandDependencies,
@@ -639,10 +677,14 @@ async function runRefreshAndLoadProjectDiagnostics(
     return;
   }
 
+  const activeBaseline = await resolveActiveRefreshBaseline(context, project, workspaceFolders);
+  const refreshCategory = inferRefreshScopeFromContract(activeBaseline.contract);
+
   const refreshPlan = buildRefreshRunPlan({
     project,
     refresh: refreshResolution.config,
     workspaceFolders,
+    refreshCategory,
   });
   dependencies.logger.info(
     `Running refresh for ${project.id} (${refreshResolution.source ?? 'configured'}) with ${refreshPlan.command} ${refreshPlan.args.join(' ')} in ${refreshPlan.cwd}; source ${refreshPlan.sourceRoot}; inventory ${refreshPlan.inventoryRoot}.`,
@@ -687,7 +729,7 @@ async function runRefreshAndLoadProjectDiagnostics(
   if (refreshedDiagnostics.kind === 'enriched') {
     const latestOutputPath = resolveProjectLatestDiagnosticsPath(project, workspaceFolders);
     const promotion = await evaluateRefreshBaselinePromotion({
-      currentBaselinePath: latestOutputPath,
+      currentBaselinePath: activeBaseline.filePath,
       refreshedDiagnosticsPath: refreshedDiagnostics.candidate.filePath,
       latestOutputPath,
     });
@@ -749,7 +791,7 @@ async function runRefreshAndLoadProjectDiagnostics(
     );
 
     const promotion = await evaluateRefreshBaselinePromotion({
-      currentBaselinePath: enrichmentResult.plan.latestOutputPath,
+      currentBaselinePath: activeBaseline.filePath,
       refreshedDiagnosticsPath: enrichmentResult.plan.archiveOutputPath,
       latestOutputPath: enrichmentResult.plan.latestOutputPath,
     });

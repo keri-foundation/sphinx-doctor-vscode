@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import {
   ConfiguredProject,
+  DiagnosticsContract,
   InventoryCandidate,
   ProjectRefreshConfig,
   WorkspaceFolderInfo,
@@ -40,6 +41,7 @@ export interface BuildRefreshRunPlanOptions {
   project: ConfiguredProject;
   refresh: ProjectRefreshConfig;
   workspaceFolders: WorkspaceFolderInfo[];
+  refreshCategory?: string;
   now?: Date;
 }
 
@@ -57,6 +59,51 @@ export interface InferProjectRefreshOptions {
 
 function toPosixPath(value: string): string {
   return value.split(path.sep).join('/');
+}
+
+function hasRefreshCategoryArg(args: readonly string[]): boolean {
+  return args.includes('--category');
+}
+
+export function inferRefreshScopeFromContract(
+  contract: DiagnosticsContract | undefined,
+): string | undefined {
+  if (!contract || contract.issues.length === 0) {
+    return undefined;
+  }
+
+  const categories = Array.from(
+    new Set(
+      contract.issues
+        .map((issue) => issue.category.trim())
+        .filter((category) => category.length > 0),
+    ),
+  ).sort();
+
+  return categories.length === 1 ? categories[0] : undefined;
+}
+
+export function buildRefreshCategoryArgs(category: string | undefined): string[] {
+  return category ? ['--category', category] : [];
+}
+
+export function applyRefreshScopeToConfig(
+  refresh: ProjectRefreshConfig,
+  category: string | undefined,
+): ProjectRefreshConfig {
+  if (!category || hasRefreshCategoryArg(refresh.args)) {
+    return {
+      ...refresh,
+      args: [...refresh.args],
+      expectedOutputGlobs: [...refresh.expectedOutputGlobs],
+    };
+  }
+
+  return {
+    ...refresh,
+    args: [...refresh.args, ...buildRefreshCategoryArgs(category)],
+    expectedOutputGlobs: [...refresh.expectedOutputGlobs],
+  };
 }
 
 async function defaultPathExists(filePath: string): Promise<boolean> {
@@ -133,17 +180,19 @@ export function buildRefreshRunPlan(options: BuildRefreshRunPlanOptions): Refres
   const inventoryRoot = inventoryWorkspaceFolder.fsPath;
   const mirrorRootPath = path.resolve(sourceRoot, mirrorRoot);
 
+  const refreshConfig = applyRefreshScopeToConfig(options.refresh, options.refreshCategory);
+
   return {
-    command: options.refresh.command,
-    args: [...options.refresh.args],
+    command: refreshConfig.command,
+    args: [...refreshConfig.args],
     cwd: cwdWorkspaceFolder.fsPath,
-    cwdWorkspaceFolder: options.refresh.cwdWorkspaceFolder,
+    cwdWorkspaceFolder: refreshConfig.cwdWorkspaceFolder,
     sourceRoot,
     inventoryRoot,
     repoRoot,
     mirrorRoot,
     mirrorRootPath,
-    expectedOutputGlobs: [...options.refresh.expectedOutputGlobs],
+    expectedOutputGlobs: [...refreshConfig.expectedOutputGlobs],
     startedAtMs: (options.now ?? new Date()).getTime(),
   };
 }

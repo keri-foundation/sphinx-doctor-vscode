@@ -14,6 +14,7 @@ import {
   buildRefreshRunPlan,
   filterRecentInventoryCandidates,
   getRefreshPermission,
+  inferRefreshScopeFromContract,
   inferProjectRefreshConfig,
   runRefreshPlan,
 } from './refreshRunner';
@@ -1087,10 +1088,23 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         return;
       }
 
+      const latestOutputPath = projectLatestDiagnosticsPath(project, workspaceFolders);
+      let refreshCategory: string | undefined;
+      if (latestOutputPath) {
+        try {
+          refreshCategory = inferRefreshScopeFromContract(
+            await loadDiagnosticsFromPath(latestOutputPath),
+          );
+        } catch {
+          refreshCategory = undefined;
+        }
+      }
+
       const refreshPlan = buildRefreshRunPlan({
         project,
         refresh: refreshResolution.config,
         workspaceFolders,
+        refreshCategory,
       });
       this.logger.info(
         `Running ${reason} for ${project.id} with ${refreshPlan.command} ${refreshPlan.args.join(' ')} in ${refreshPlan.cwd}.`,

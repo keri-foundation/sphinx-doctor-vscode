@@ -14,9 +14,12 @@ import {
   getEnrichmentPermission,
 } from '../src/enrichmentRunner';
 import {
+  applyRefreshScopeToConfig,
+  buildRefreshCategoryArgs,
   buildRefreshRunPlan,
   filterRecentInventoryCandidates,
   getRefreshPermission,
+  inferRefreshScopeFromContract,
   inferProjectRefreshConfig,
 } from '../src/refreshRunner';
 import { DiagnosticsPublicationIndex } from '../src/publicationIndex';
@@ -286,6 +289,30 @@ function buildSummaryContract(options: {
       retainedOnly: options.retainedOnly,
     },
     issues: [],
+  };
+}
+
+function buildCategoryScopeContract(categories: string[]): DiagnosticsContract {
+  return {
+    ...contract,
+    summary: {
+      total: categories.length,
+      bySeverity: { error: categories.length },
+      byCategory: categories.reduce<Record<string, number>>((counts, category) => {
+        counts[category] = (counts[category] ?? 0) + 1;
+        return counts;
+      }, {}),
+      mappedCount: categories.length,
+      unmappedCount: 0,
+      publishedDiagnostics: categories.length,
+      retainedOnly: 0,
+    },
+    issues: categories.map((category, index) => ({
+      ...mappedIssue,
+      id: `scope-${index}`,
+      category,
+      code: category,
+    })),
   };
 }
 
@@ -1022,6 +1049,58 @@ test('refresh-scope drift detection catches the Keripy narrow-to-broad repro', (
   ]);
 });
 
+test('single-category baseline infers a refresh category scope', () => {
+  const scope = inferRefreshScopeFromContract(
+    buildCategoryScopeContract(['unexpected-indentation', 'unexpected-indentation']),
+  );
+
+  assert.equal(scope, 'unexpected-indentation');
+});
+
+test('multi-category baseline does not infer a refresh category scope', () => {
+  const scope = inferRefreshScopeFromContract(
+    buildCategoryScopeContract(['unexpected-indentation', 'missing-reference']),
+  );
+
+  assert.equal(scope, undefined);
+});
+
+test('empty baseline does not infer a refresh category scope', () => {
+  const scope = inferRefreshScopeFromContract({
+    ...contract,
+    issues: [],
+    summary: {
+      ...contract.summary,
+      total: 0,
+      byCategory: {},
+      mappedCount: 0,
+      unmappedCount: 0,
+      publishedDiagnostics: 0,
+      retainedOnly: 0,
+    },
+  });
+
+  assert.equal(scope, undefined);
+});
+
+test('buildRefreshCategoryArgs appends a category only when scope exists', () => {
+  assert.deepEqual(buildRefreshCategoryArgs('unexpected-indentation'), [
+    '--category',
+    'unexpected-indentation',
+  ]);
+  assert.deepEqual(buildRefreshCategoryArgs(undefined), []);
+});
+
+test('applyRefreshScopeToConfig appends category args only when scope exists', () => {
+  const scoped = applyRefreshScopeToConfig(configuredRefresh, 'unexpected-indentation');
+
+  assert.deepEqual(scoped.args.slice(-2), ['--category', 'unexpected-indentation']);
+  assert.deepEqual(
+    applyRefreshScopeToConfig(configuredRefresh, undefined).args,
+    configuredRefresh.args,
+  );
+});
+
 test('refresh-scope drift detection ignores modest same-scope growth', () => {
   const currentBaseline = buildSummaryContract({
     total: 120,
@@ -1166,6 +1245,33 @@ test('buildRefreshRunPlan keeps cwd, source, inventory, and mirror roots separat
   assert.equal(plan.mirrorRootPath, '/workspace/notes/libs/keripy/.sphinx-diagnostics');
   assert.equal(plan.startedAtMs, new Date(2026, 4, 9, 12, 34, 56).getTime());
   assert.deepEqual(plan.expectedOutputGlobs, configuredRefresh.expectedOutputGlobs);
+});
+
+test('buildRefreshRunPlan appends category args when a refresh scope exists', () => {
+  const plan = buildRefreshRunPlan({
+    project: configuredProject,
+    refresh: configuredRefresh,
+    workspaceFolders: [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+    ],
+    refreshCategory: 'unexpected-indentation',
+  });
+
+  assert.deepEqual(plan.args.slice(-2), ['--category', 'unexpected-indentation']);
+});
+
+test('buildRefreshRunPlan keeps existing behavior unchanged without inferred scope', () => {
+  const plan = buildRefreshRunPlan({
+    project: configuredProject,
+    refresh: configuredRefresh,
+    workspaceFolders: [
+      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
+    ],
+  });
+
+  assert.deepEqual(plan.args, configuredRefresh.args);
 });
 
 test('inferProjectRefreshConfig derives the Devtools runner for the standard notes workspace layout', async () => {
