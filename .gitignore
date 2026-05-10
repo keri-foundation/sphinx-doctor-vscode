@@ -3,6 +3,29 @@ out/
 dist/
 .vscode-test/
 *.vsix
+
+# Python-generated artifacts
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+site/
+.eggs/
+*.egg-info/
+
+# Local virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# OS/editor-generated artifacts
 .DS_Store
+Thumbs.db
