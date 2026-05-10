@@ -147,6 +147,7 @@ export interface ExtensionConfig {
   watchDebounceMs: number;
   refreshAutoRunOnStartup: boolean;
   refreshAutoRunOnSave: boolean;
+  refreshDebounceMs: number;
   logLevel: SphinxDoctorLogLevel;
 }
 

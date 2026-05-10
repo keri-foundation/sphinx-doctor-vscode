@@ -55,10 +55,19 @@ const RELEVANT_REFRESH_BASENAMES = new Set([
   'conf.py',
   'makefile',
   'make.bat',
-  'requirements.txt',
-  'requirements-docs.txt',
   'pyproject.toml',
 ]);
+const IGNORED_REFRESH_PATH_SEGMENTS = new Set([
+  '.sphinx-diagnostics',
+  '.venv-docs',
+  '_build',
+  'node_modules',
+  '__pycache__',
+]);
+
+function isRequirementsFile(baseName: string): boolean {
+  return /^requirements([.-].+)?\.(txt|in)$/i.test(baseName);
+}
 
 function normalizeFilePath(value: string): string {
   return path.resolve(value);
@@ -108,12 +117,12 @@ export function isExcludedWorkspaceFolder(
 
 export function isRelevantRefreshSavePath(filePath: string): boolean {
   const normalized = normalizeFilePath(filePath);
-  if (normalized.split(path.sep).includes('.sphinx-diagnostics')) {
+  if (normalized.split(path.sep).some((segment) => IGNORED_REFRESH_PATH_SEGMENTS.has(segment))) {
     return false;
   }
 
   const baseName = path.basename(normalized).toLowerCase();
-  if (RELEVANT_REFRESH_BASENAMES.has(baseName)) {
+  if (RELEVANT_REFRESH_BASENAMES.has(baseName) || isRequirementsFile(baseName)) {
     return true;
   }
 
@@ -193,6 +202,12 @@ export function getRefreshOnSaveDecision(
     reason: 'Saved file belongs to a refreshable project.',
     project,
   };
+}
+
+export function getRefreshOnSaveDebounceMs(
+  config: Pick<ExtensionConfig, 'watchDebounceMs' | 'refreshDebounceMs'>,
+): number {
+  return config.refreshDebounceMs;
 }
 
 export function createSingleFlightController(): SingleFlightController {

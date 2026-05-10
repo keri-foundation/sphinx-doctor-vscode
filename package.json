@@ -280,6 +280,12 @@
           "default": false,
           "description": "Automatically run a debounced project refresh after saving a relevant source or docs file in a trusted workspace. Disabled by default."
         },
+        "sphinxDoctor.refresh.debounceMs": {
+          "type": "number",
+          "default": 1500,
+          "description": "Debounce delay for save-triggered project refresh. Separate from diagnostics file watcher debounce.",
+          "minimum": 100
+        },
         "sphinxDoctor.logLevel": {
           "type": "string",
           "enum": [

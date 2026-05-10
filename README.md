@@ -277,9 +277,25 @@ Watch mode settings:
 	"sphinxDoctor.watch.debounceMs": 750,
 	"sphinxDoctor.enrichment.autoRun": false,
 	"sphinxDoctor.refresh.autoRunOnStartup": false,
-	"sphinxDoctor.refresh.autoRunOnSave": false
+	"sphinxDoctor.refresh.autoRunOnSave": false,
+	"sphinxDoctor.refresh.debounceMs": 1500
 }
 ```
+
+## Auto-Refresh On Save
+
+Auto-refresh on save is opt-in because it runs the local Sphinx refresh command.
+
+Example settings:
+
+```json
+{
+	"sphinxDoctor.refresh.autoRunOnSave": true,
+	"sphinxDoctor.refresh.debounceMs": 1500
+}
+```
+
+Load the focused diagnostics lane first. Then fix a docstring and save. Sphinx Doctor refreshes the owning project, focused single-category baselines preserve their scope, and the parity guard blocks promotion if the refreshed run expands the issue universe too much.
 
 The status bar keeps the watch result visible with short states such as `Sphinx Doctor: idle`, `Sphinx Doctor: no diagnostics`, `Sphinx Doctor: 30 issues`, or `Sphinx Doctor: error`.
 

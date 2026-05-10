@@ -12,6 +12,8 @@ const DEFAULT_PREFERRED_INVENTORY_FILES = ['issues.vscode.json', 'issues.json'];
 const DEFAULT_PYTHON_INTERPRETER = 'python3';
 const DEFAULT_DISCOVERY_INVENTORY_WORKSPACE_FOLDER_NAMES = ['01-keri-notes'];
 const DEFAULT_WATCH_DEBOUNCE_MS = 750;
+const DEFAULT_REFRESH_DEBOUNCE_MS = 1500;
+const MIN_REFRESH_DEBOUNCE_MS = 100;
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -46,6 +48,15 @@ function asStringArray(value: unknown): string[] {
   return value
     .map((entry) => asString(entry))
     .filter((entry): entry is string => entry !== undefined);
+}
+
+export function coerceRefreshDebounceMs(value: unknown): number {
+  const parsed = asNumber(value);
+  if (parsed === undefined || parsed < MIN_REFRESH_DEBOUNCE_MS) {
+    return DEFAULT_REFRESH_DEBOUNCE_MS;
+  }
+
+  return parsed;
 }
 
 function normalizeRefreshConfig(value: unknown): ProjectRefreshConfig | undefined {
@@ -175,6 +186,7 @@ export function getExtensionConfig(): ExtensionConfig {
     watchDebounceMs: Math.max(0, asNumber(configuration.get('watch.debounceMs')) ?? DEFAULT_WATCH_DEBOUNCE_MS),
     refreshAutoRunOnStartup: asBoolean(configuration.get('refresh.autoRunOnStartup')) ?? false,
     refreshAutoRunOnSave: asBoolean(configuration.get('refresh.autoRunOnSave')) ?? false,
+    refreshDebounceMs: coerceRefreshDebounceMs(configuration.get('refresh.debounceMs')),
     logLevel: coerceLogLevel(configuration.get('logLevel', 'info')),
   };
 }

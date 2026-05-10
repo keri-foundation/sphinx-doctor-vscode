@@ -47,6 +47,7 @@ import {
   createDebouncedTrigger,
   DebouncedTrigger,
   getRefreshOnSaveDecision,
+  getRefreshOnSaveDebounceMs,
   formatWatchModeText,
   formatWatchModeTooltip,
   hasOpenWorkspaceFolders,
@@ -945,8 +946,10 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       return;
     }
 
+    this.logger.info(`Saved file detected: ${document.uri.fsPath}.`);
     const config = getExtensionConfig();
     if (!config.refreshAutoRunOnSave) {
+      this.logger.info(`Ignoring saved file because refresh-on-save is disabled: ${document.uri.fsPath}.`);
       return;
     }
 
@@ -957,11 +960,17 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       isWorkspaceTrusted: vscode.workspace.isTrusted === true,
     });
     if (!decision.allowed || !decision.project) {
+      this.logger.info(`Ignoring saved file ${document.uri.fsPath}: ${decision.reason}`);
       return;
     }
 
-    this.logger.info(`Queued refresh-on-save for ${decision.project.id}: ${document.uri.fsPath}.`);
-    this.getProjectRefreshTrigger(decision.project.id, config.watchDebounceMs).trigger(
+    this.logger.info(
+      `Queued refresh-on-save for ${decision.project.id} from ${document.uri.fsPath} with debounce ${config.refreshDebounceMs}ms.`,
+    );
+    this.getProjectRefreshTrigger(
+      decision.project.id,
+      getRefreshOnSaveDebounceMs(config),
+    ).trigger(
       `saved ${path.basename(document.uri.fsPath)}`,
     );
   }
@@ -1053,7 +1062,9 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       return;
     }
 
+    this.logger.info(`Starting save-triggered refresh for ${project.id}: ${reason}.`);
     await this.runProjectRefreshLifecycle(project, workspaceFolders, `refresh-on-save (${reason})`);
+    this.logger.info(`Completed save-triggered refresh for ${project.id}: ${reason}.`);
   }
 
   private async runProjectRefreshLifecycle(

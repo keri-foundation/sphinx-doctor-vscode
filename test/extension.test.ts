@@ -46,6 +46,7 @@ import {
 import type { PublishResult } from '../src/publishDiagnostics';
 import {
   buildProjectQuickPickItems,
+  coerceRefreshDebounceMs,
   coerceProjects,
   projectSelectionMode,
 } from '../src/config';
@@ -63,6 +64,7 @@ import {
   createDebouncedTrigger,
   findOwningProjectForPath,
   formatWatchModeText,
+  getRefreshOnSaveDebounceMs,
   getRefreshOnSaveDecision,
   hasOpenWorkspaceFolders,
   isExcludedWorkspaceFolder,
@@ -608,6 +610,18 @@ test('coerceProjects keeps valid project settings and drops incomplete entries',
     ...configuredProject,
     refresh: configuredRefresh,
   });
+});
+
+test('coerceRefreshDebounceMs defaults to 1500 and respects safe custom values', () => {
+  assert.equal(coerceRefreshDebounceMs(undefined), 1500);
+  assert.equal(coerceRefreshDebounceMs(1500), 1500);
+  assert.equal(coerceRefreshDebounceMs(2200), 2200);
+});
+
+test('coerceRefreshDebounceMs falls back safely for invalid or too-low values', () => {
+  assert.equal(coerceRefreshDebounceMs('fast'), 1500);
+  assert.equal(coerceRefreshDebounceMs(-1), 1500);
+  assert.equal(coerceRefreshDebounceMs(50), 1500);
 });
 
 test('projectSelectionMode distinguishes none, single, and multi-project selection', () => {
@@ -1574,6 +1588,7 @@ test('extension manifest declares the stable sphinxDoctor settings surface', asy
     'sphinxDoctor.watch.debounceMs',
     'sphinxDoctor.refresh.autoRunOnStartup',
     'sphinxDoctor.refresh.autoRunOnSave',
+    'sphinxDoctor.refresh.debounceMs',
     'sphinxDoctor.discovery.enabled',
     'sphinxDoctor.discovery.includeLowConfidence',
     'sphinxDoctor.discovery.inventoryWorkspaceFolderNames',
@@ -1810,6 +1825,21 @@ test('refresh-on-save ignores generated artifacts under .sphinx-diagnostics', ()
   assert.equal(isRelevantRefreshSavePath('/workspace/keripy/src/keri/core/coring.py'), true);
 });
 
+test('refresh-on-save ignores generated and build paths outside .sphinx-diagnostics', () => {
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/.venv-docs/bin/python'), false);
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/docs/_build/html/index.html'), false);
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/node_modules/pkg/index.js'), false);
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/src/__pycache__/mod.cpython-312.pyc'), false);
+});
+
+test('refresh-on-save treats docs config and requirements files as relevant inputs', () => {
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/docs/conf.py'), true);
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/docs/source/conf.py'), true);
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/docs/requirements-docs.txt'), true);
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/requirements.txt'), true);
+  assert.equal(isRelevantRefreshSavePath('/workspace/keripy/pyproject.toml'), true);
+});
+
 test('findOwningProjectForPath resolves the matching source project', () => {
   const project = findOwningProjectForPath(
     '/workspace/keripy/src/keri/core/coring.py',
@@ -1881,6 +1911,16 @@ test('getRefreshOnSaveDecision returns the owning project for relevant saves', (
 
   assert.equal(decision.allowed, true);
   assert.equal(decision.project?.id, 'keripy');
+});
+
+test('save-triggered refresh uses refresh debounce instead of watch debounce', () => {
+  assert.equal(
+    getRefreshOnSaveDebounceMs({
+      watchDebounceMs: 750,
+      refreshDebounceMs: 1500,
+    }),
+    1500,
+  );
 });
 
 test('createSingleFlightController blocks overlapping project refreshes', () => {
