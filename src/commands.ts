@@ -16,6 +16,11 @@ import {
   loadDiagnosticsFromPath,
 } from './loadDiagnostics';
 import {
+  buildDiagnosticsAccountingReport,
+  buildDiagnosticsCountsToastMessage,
+} from './diagnosticsAccounting';
+import { loadAllDiscoveredDiagnostics } from './loadAllDiagnostics';
+import {
   buildEnrichmentRunPlan,
   getEnrichmentPermission,
   runEnrichmentPlan,
@@ -28,7 +33,7 @@ import {
   runRefreshPlan,
 } from './refreshRunner';
 import { SphinxDoctorLogger } from './log';
-import { publishDiagnostics } from './publishDiagnostics';
+import { computeDiagnosticsAccounting, publishDiagnostics, PublishLogger } from './publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
 import {
   buildSelfTestStatusTooltip,
@@ -80,6 +85,13 @@ interface SelectedProjectDiagnostics {
   candidate: DiscoveredInventoryCandidate;
   kind: DiagnosticsFileKind;
 }
+
+const NOOP_PUBLISH_LOGGER: PublishLogger = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
 
 function logDiscoveryDecisions(
   logger: SphinxDoctorLogger,
@@ -175,6 +187,62 @@ async function loadAndPublish(
     message: statusMessage,
   });
   void vscode.window.showInformationMessage(statusMessage);
+}
+
+async function explainDiagnosticsCounts(
+  context: vscode.ExtensionContext,
+  dependencies: CommandDependencies,
+): Promise<void> {
+  const config = getExtensionConfig();
+  dependencies.logger.setLevel(config.logLevel);
+
+  const lastLoaded = readLastLoadedDiagnosticsState(context);
+  if (!lastLoaded) {
+    void vscode.window.showInformationMessage(
+      'No previous diagnostics file is stored yet. Run Sphinx Doctor: Load Project Diagnostics, Discover and Load Diagnostics, or Refresh Project Diagnostics first.',
+    );
+    return;
+  }
+
+  const diagnosticsUri = vscode.Uri.parse(lastLoaded.fileUri);
+  try {
+    await vscode.workspace.fs.stat(diagnosticsUri);
+  } catch {
+    void vscode.window.showWarningMessage(
+      'The last loaded diagnostics file is no longer available. Run Sphinx Doctor: Load Project Diagnostics, Discover and Load Diagnostics, or Refresh Project Diagnostics again.',
+    );
+    return;
+  }
+
+  const contract = await loadDiagnosticsFromPath(diagnosticsUri.fsPath);
+  const accounting = computeDiagnosticsAccounting(contract, {
+    workspaceFolders: vscode.workspace.workspaceFolders,
+    diagnosticMode: config.diagnosticsMode,
+    defaultSourceWorkspaceFolder:
+      lastLoaded.defaultSourceWorkspaceFolder ?? config.defaultSourceWorkspaceFolder,
+    defaultRepoRoot: lastLoaded.defaultRepoRoot,
+    logger: NOOP_PUBLISH_LOGGER,
+  });
+  const report = buildDiagnosticsAccountingReport({
+    contract,
+    diagnosticMode: config.diagnosticsMode,
+    diagnosticsFilePath: diagnosticsUri.fsPath,
+    accounting,
+  });
+
+  for (const line of report.split(/\r?\n/)) {
+    dependencies.logger.info(line);
+  }
+  dependencies.logger.show(true);
+
+  void vscode.window.showInformationMessage(
+    buildDiagnosticsCountsToastMessage({
+      contract,
+      diagnosticMode: config.diagnosticsMode,
+      diagnosticsFilePath: diagnosticsUri.fsPath,
+      accounting,
+    }),
+  );
 }
 
 async function selectProject(projects: ConfiguredProject[]): Promise<ConfiguredProject | undefined> {
@@ -909,12 +977,16 @@ export function registerCommands(
   context.subscriptions.push(
     vscode.commands.registerCommand('sphinxDoctor.discoverAndLoadDiagnostics', async () => {
       await runSafely(dependencies.logger, 'Discover And Load Diagnostics', async () => {
-        const project = await selectMergedProject(dependencies.logger);
-        if (!project) {
-          return;
-        }
-
-        await loadOrEnrichProjectDiagnostics(context, dependencies, project, true);
+        await loadAllDiscoveredDiagnostics({
+          watchMode: dependencies.watchMode,
+          logger: dependencies.logger,
+          showWarningMessage: (message) => {
+            void vscode.window.showWarningMessage(message);
+          },
+          showInformationMessage: (message) => {
+            void vscode.window.showInformationMessage(message);
+          },
+        });
       });
     }),
   );
@@ -944,6 +1016,14 @@ export function registerCommands(
           defaultSourceWorkspaceFolderOverride: lastLoaded.defaultSourceWorkspaceFolder,
           defaultRepoRootOverride: lastLoaded.defaultRepoRoot,
         });
+      });
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sphinxDoctor.explainDiagnosticsCounts', async () => {
+      await runSafely(dependencies.logger, 'Explain Diagnostics Counts', async () => {
+        await explainDiagnosticsCounts(context, dependencies);
       });
     }),
   );

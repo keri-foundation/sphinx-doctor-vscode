@@ -631,6 +631,26 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     return this.summary;
   }
 
+  public getLastRefreshSnapshot(): {
+    discoveredProjectCount: number;
+    knownProjectCount: number;
+    loadedProjectCount: number;
+    skippedProjectCount: number;
+    issueCount: number;
+    publishedDiagnostics: number;
+  } {
+    const loadedProjectCount = this.lastLoadedDiagnosticsFiles.length;
+    const knownProjectCount = this.lastKnownProjectIds.length;
+    return {
+      discoveredProjectCount: this.lastDiscoveredProjectIds.length,
+      knownProjectCount,
+      loadedProjectCount,
+      skippedProjectCount: Math.max(0, knownProjectCount - loadedProjectCount),
+      issueCount: this.lastIssueCount,
+      publishedDiagnostics: this.lastPublishedCount,
+    };
+  }
+
   public dispose(): void {
     this.refreshTrigger?.dispose();
     this.disposeAutoRefreshTriggers();

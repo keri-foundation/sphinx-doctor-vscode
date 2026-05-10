@@ -14,6 +14,8 @@ import {
 } from './types';
 import { resolveIssueFilePath } from './workspace';
 
+export type PublishLogger = Pick<SphinxDoctorLogger, 'debug' | 'info' | 'warn' | 'error'>;
+
 export interface PublishOptions {
   workspaceFolders: readonly vscode.WorkspaceFolder[] | undefined;
   diagnosticMode: DiagnosticMode;
@@ -21,7 +23,7 @@ export interface PublishOptions {
   defaultRepoRoot?: string;
   fixtureSourceRoot?: string;
   allowFirstFolderFallback?: boolean;
-  logger: SphinxDoctorLogger;
+  logger: PublishLogger;
 }
 
 export interface PublishResult {
@@ -164,6 +166,13 @@ function collectDiagnostics(
   };
 }
 
+export function computeDiagnosticsAccounting(
+  contract: DiagnosticsContract,
+  options: PublishOptions,
+): PublishResult {
+  return collectDiagnostics(contract, options).result;
+}
+
 export function publishDiagnosticsBatch(
   collection: vscode.DiagnosticCollection,
   entries: PublishBatchEntry[],
@@ -192,9 +201,9 @@ export function publishDiagnosticsBatch(
     });
 
     issueCount += collected.result.issueCount;
-  publishableBeforeFilter += collected.result.publishableBeforeFilter;
+    publishableBeforeFilter += collected.result.publishableBeforeFilter;
     publishedDiagnostics += collected.result.publishedDiagnostics;
-  filteredByMode += collected.result.filteredByMode;
+    filteredByMode += collected.result.filteredByMode;
     targetUriCount += collected.result.targetUriCount;
     skippedIssues += collected.result.skippedIssues;
     resolutionFailures += collected.result.resolutionFailures;

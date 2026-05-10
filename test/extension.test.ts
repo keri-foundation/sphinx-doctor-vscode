@@ -15,6 +15,14 @@ import {
   inferProjectRefreshConfig,
 } from '../src/refreshRunner';
 import {
+  buildLoadAllDiagnosticsStatusMessage,
+  loadAllDiscoveredDiagnostics,
+} from '../src/loadAllDiagnostics';
+import {
+  buildDiagnosticsAccountingReport,
+  buildDiagnosticsCountsToastMessage,
+} from '../src/diagnosticsAccounting';
+import {
   buildDiagnosticMessage,
   ConfiguredProject,
   DiagnosticsContract,
@@ -26,6 +34,7 @@ import {
   summarizeDiagnosticMode,
   toZeroBasedPosition,
 } from '../src/types';
+import type { PublishResult } from '../src/publishDiagnostics';
 import {
   buildProjectQuickPickItems,
   coerceProjects,
@@ -345,6 +354,154 @@ test('mode summaries change published counts without deleting retained issues', 
     publishedInMode: 2,
     retainedOnly: 1,
   });
+});
+
+test('diagnostics accounting report includes all required counters and relationship wording', () => {
+  const accounting: PublishResult = {
+    issueCount: 451,
+    publishableBeforeFilter: 204,
+    publishedDiagnostics: 194,
+    filteredByMode: 10,
+    targetUriCount: 33,
+    skippedIssues: 257,
+    resolutionFailures: 2,
+  };
+  const report = buildDiagnosticsAccountingReport({
+    contract: {
+      ...contract,
+      summary: {
+        ...contract.summary,
+        publishedDiagnostics: 204,
+        retainedOnly: 247,
+      },
+    },
+    diagnosticMode: 'layout',
+    diagnosticsFilePath: '/workspace/notes/.sphinx-diagnostics/latest.json',
+    accounting,
+  });
+
+  assert.match(report, /diagnostic mode: layout/);
+  assert.match(report, /diagnostics file: \/workspace\/notes\/\.sphinx-diagnostics\/latest\.json/);
+  assert.match(report, /total enriched issues: 451/);
+  assert.match(report, /contract summary published diagnostics: 204/);
+  assert.match(report, /contract retained-only count: 247/);
+  assert.match(report, /publishable before mode filter: 204/);
+  assert.match(report, /published after mode filter: 194/);
+  assert.match(report, /filtered by mode: 10/);
+  assert.match(report, /skipped issues: 257/);
+  assert.match(report, /resolution failures: 2/);
+  assert.match(report, /target URI count: 33/);
+  assert.match(report, /Problems should match published after mode filter, not total enriched issues/);
+});
+
+test('diagnostics counts toast explains total issues can exceed published diagnostics', () => {
+  const message = buildDiagnosticsCountsToastMessage({
+    contract,
+    diagnosticMode: 'reference',
+    diagnosticsFilePath: '/workspace/notes/latest.json',
+    accounting: {
+      issueCount: 451,
+      publishableBeforeFilter: 204,
+      publishedDiagnostics: 204,
+      filteredByMode: 0,
+      targetUriCount: 33,
+      skippedIssues: 247,
+      resolutionFailures: 0,
+    },
+  });
+
+  assert.equal(
+    message,
+    'Problems should match 204 published diagnostics in reference mode, not 451 total enriched issues.',
+  );
+});
+
+test('load-all diagnostics status message summarizes loaded and skipped projects', () => {
+  assert.equal(
+    buildLoadAllDiagnosticsStatusMessage({
+      discoveredProjectCount: 2,
+      knownProjectCount: 3,
+      loadedProjectCount: 2,
+      skippedProjectCount: 1,
+      issueCount: 451,
+      publishedDiagnostics: 194,
+    }),
+    'Sphinx Doctor inspected 3 supported project(s); 2 loaded; 1 skipped; 451 issues; 194 published diagnostics',
+  );
+});
+
+test('load-all diagnostics uses watch-mode batch loading and avoids project selection', async () => {
+  const calls: Array<{ reason: string; loadDiagnostics: boolean | undefined }> = [];
+  const infoMessages: string[] = [];
+  const warningMessages: string[] = [];
+
+  const snapshot = await loadAllDiscoveredDiagnostics({
+    watchMode: {
+      async refreshAll(reason, loadDiagnostics) {
+        calls.push({ reason, loadDiagnostics });
+      },
+      getLastRefreshSnapshot() {
+        return {
+          discoveredProjectCount: 2,
+          knownProjectCount: 3,
+          loadedProjectCount: 2,
+          skippedProjectCount: 1,
+          issueCount: 451,
+          publishedDiagnostics: 194,
+        };
+      },
+    },
+    logger: {
+      info: () => {},
+      warn: () => {},
+    },
+    showWarningMessage(message) {
+      warningMessages.push(message);
+    },
+    showInformationMessage(message) {
+      infoMessages.push(message);
+    },
+  });
+
+  assert.deepEqual(calls, [
+    { reason: 'manual command: discover and load diagnostics', loadDiagnostics: true },
+  ]);
+  assert.deepEqual(warningMessages, []);
+  assert.deepEqual(infoMessages, [
+    'Sphinx Doctor inspected 3 supported project(s); 2 loaded; 1 skipped; 451 issues; 194 published diagnostics',
+  ]);
+  assert.deepEqual(snapshot, {
+    discoveredProjectCount: 2,
+    knownProjectCount: 3,
+    loadedProjectCount: 2,
+    skippedProjectCount: 1,
+    issueCount: 451,
+    publishedDiagnostics: 194,
+  });
+});
+
+test('load-all diagnostics warns when watch mode is unavailable', async () => {
+  const infoMessages: string[] = [];
+  const warningMessages: string[] = [];
+
+  const snapshot = await loadAllDiscoveredDiagnostics({
+    logger: {
+      info: () => {},
+      warn: () => {},
+    },
+    showWarningMessage(message) {
+      warningMessages.push(message);
+    },
+    showInformationMessage(message) {
+      infoMessages.push(message);
+    },
+  });
+
+  assert.equal(snapshot, undefined);
+  assert.deepEqual(infoMessages, []);
+  assert.deepEqual(warningMessages, [
+    'Sphinx Doctor watch mode is unavailable, so Discover and Load Diagnostics cannot load all workspace projects.',
+  ]);
 });
 
 test('buildDiagnosticMessage includes category, object name, and low-confidence marker', () => {
@@ -987,6 +1144,7 @@ test('extension manifest declares the stable sphinxDoctor settings surface', asy
   );
   assert.equal(commandIds.has(SELF_TEST_COMMAND_ID), true);
   assert.equal(commandIds.has('sphinxDoctor.refreshProjectDiagnostics'), true);
+  assert.equal(commandIds.has('sphinxDoctor.explainDiagnosticsCounts'), true);
 
   const selfTestCommand = (manifest.contributes?.commands ?? []).find(
     (command) => command.command === SELF_TEST_COMMAND_ID,
@@ -997,6 +1155,11 @@ test('extension manifest declares the stable sphinxDoctor settings surface', asy
     (command) => command.command === 'sphinxDoctor.refreshProjectDiagnostics',
   );
   assert.equal(refreshCommand?.title, 'Sphinx Doctor: Refresh Project Diagnostics');
+
+  const explainCommand = (manifest.contributes?.commands ?? []).find(
+    (command) => command.command === 'sphinxDoctor.explainDiagnosticsCounts',
+  );
+  assert.equal(explainCommand?.title, 'Sphinx Doctor: Explain Diagnostics Counts');
 
   const properties = manifest.contributes?.configuration?.properties ?? {};
   for (const key of [

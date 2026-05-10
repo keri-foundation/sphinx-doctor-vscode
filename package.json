@@ -61,6 +61,10 @@
         "title": "Sphinx Doctor: Reload Last Diagnostics"
       },
       {
+        "command": "sphinxDoctor.explainDiagnosticsCounts",
+        "title": "Sphinx Doctor: Explain Diagnostics Counts"
+      },
+      {
         "command": "sphinxDoctor.enrichAndLoadProjectDiagnostics",
         "title": "Sphinx Doctor: Enrich and Load Project Diagnostics"
       },

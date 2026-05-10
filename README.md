@@ -20,6 +20,23 @@ The stable multi-root KERI workspace should not need a hard-coded `sphinxDoctor.
 - give a human a visual triage surface for navigating and fixing problems
 - keep the first release local and simple rather than inventing a remote service
 
+## Normal Workflow
+
+Open the Command Palette:
+
+- macOS: `Cmd+Shift+P`
+- Windows/Linux: `Ctrl+Shift+P`
+
+Type `Sphinx Doctor`, then run:
+
+`Sphinx Doctor: Discover and Load Diagnostics`
+
+This discovers supported workspace projects, loads compatible existing diagnostics artifacts, and publishes source-mapped diagnostics into Problems.
+
+Use `Sphinx Doctor: Explain Diagnostics Counts` when the total issue count does not match the Problems count.
+
+Use `Sphinx Doctor: Show Status` for current extension status.
+
 ## Repo Documents
 
 - docs/product-scope.md defines the problem, users, scope, and non-goals
@@ -77,14 +94,13 @@ Use this when you want Sphinx Doctor to behave like a normal extension in the re
 1. From the extension repo, run `npm run package`.
 2. Install the VSIX with `npm run install:local`, or use `Extensions: Install from VSIX` and choose the generated `.vsix` file.
 3. Reload the KERI workspace window.
-4. Run `Sphinx Doctor: Publish Self-Test Diagnostic`.
-5. Run `Sphinx Doctor: Refresh Project Diagnostics`.
+4. Follow the normal workflow above.
 
 The `package` script uses `npm exec --yes --package @vscode/vsce -- vsce package`, so the packager is fetched on demand without a separate Yarn install or an interactive approval prompt. The `install:local` script expects the VS Code `code` shell command to be installed. If `code` is not available, use `Extensions: Install from VSIX` instead.
 
 ## Verify The Extension Is Running
 
-Use the self-test command to separate extension visibility problems from Sphinx artifact problems.
+Use the self-test command to separate extension visibility problems from Sphinx artifact problems. This is a troubleshooting path, not the normal day-to-day workflow.
 
 In an Extension Development Host:
 
