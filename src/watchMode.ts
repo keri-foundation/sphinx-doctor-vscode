@@ -5,6 +5,8 @@ import * as vscode from 'vscode';
 import { getExtensionConfig, projectLabel } from './config';
 import {
   buildEnrichmentRunPlan,
+  evaluateRefreshBaselinePromotion,
+  formatRefreshScopeDriftWarning,
   getEnrichmentPermission,
   runEnrichmentPlan,
 } from './enrichmentRunner';
@@ -157,6 +159,23 @@ function projectSourceRoot(
   }
 
   return path.resolve(sourceFolder.fsPath, project.repoRoot ?? '.');
+}
+
+function projectLatestDiagnosticsPath(
+  project: ConfiguredProject,
+  workspaceFolders: WorkspaceFolderInfo[],
+): string | undefined {
+  const sourceFolder = findWorkspaceFolderByName(workspaceFolders, project.sourceWorkspaceFolder);
+  if (!sourceFolder) {
+    return undefined;
+  }
+
+  return path.resolve(
+    sourceFolder.fsPath,
+    project.repoRoot ?? '.',
+    project.mirrorRoot ?? '.sphinx-diagnostics',
+    'latest.json',
+  );
 }
 
 export class SphinxDoctorWatchMode implements vscode.Disposable {
@@ -1103,9 +1122,31 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       }
 
       if (refreshed.kind === 'enriched') {
+        const latestOutputPath = projectLatestDiagnosticsPath(project, workspaceFolders);
+        if (!latestOutputPath) {
+          this.setProjectStatus(
+            project.id,
+            `${reason} produced enriched diagnostics, but the source workspace folder could not be resolved for latest.json promotion.`,
+          );
+          return;
+        }
+
+        const promotion = await evaluateRefreshBaselinePromotion({
+          currentBaselinePath: latestOutputPath,
+          refreshedDiagnosticsPath: refreshed.candidate.filePath,
+          latestOutputPath,
+        });
+        if (promotion.drift.detected) {
+          const warning = `${formatRefreshScopeDriftWarning(projectLabel(project), promotion.drift)} Refreshed run preserved at ${refreshed.candidate.filePath}.`;
+          this.logger.warn(warning);
+          this.setProjectStatus(project.id, warning);
+          void vscode.window.showWarningMessage(warning);
+          return;
+        }
+
         this.setProjectStatus(
           project.id,
-          `${reason} produced enriched diagnostics at ${refreshed.candidate.filePath}.`,
+          `${reason} promoted enriched diagnostics to ${promotion.activeDiagnosticsPath}.`,
         );
         this.scheduleRefresh(`${reason}: enriched artifact changed`);
         return;
@@ -1134,8 +1175,21 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       this.logger.info(
         `Enriching refreshed diagnostics for ${project.id}: raw ${enrichmentPlan.rawIssuesPath}; latest ${enrichmentPlan.latestOutputPath}.`,
       );
-      await runEnrichmentPlan(enrichmentPlan);
-      this.setProjectStatus(project.id, `${reason} wrote ${enrichmentPlan.latestOutputPath}.`);
+      await runEnrichmentPlan(enrichmentPlan, { promoteLatest: false });
+      const promotion = await evaluateRefreshBaselinePromotion({
+        currentBaselinePath: enrichmentPlan.latestOutputPath,
+        refreshedDiagnosticsPath: enrichmentPlan.archiveOutputPath,
+        latestOutputPath: enrichmentPlan.latestOutputPath,
+      });
+      if (promotion.drift.detected) {
+        const warning = `${formatRefreshScopeDriftWarning(projectLabel(project), promotion.drift)} Refreshed run preserved at ${enrichmentPlan.archiveOutputPath}.`;
+        this.logger.warn(warning);
+        this.setProjectStatus(project.id, warning);
+        void vscode.window.showWarningMessage(warning);
+        return;
+      }
+
+      this.setProjectStatus(project.id, `${reason} wrote ${promotion.activeDiagnosticsPath}.`);
       this.scheduleRefresh(`${reason}: latest.json changed`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

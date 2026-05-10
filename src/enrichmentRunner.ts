@@ -2,7 +2,8 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { ConfiguredProject, WorkspaceFolderInfo } from './types';
+import { loadDiagnosticsFromPath } from './loadDiagnostics';
+import { ConfiguredProject, DiagnosticsContract, WorkspaceFolderInfo } from './types';
 import { findWorkspaceFolderByName } from './workspace';
 
 export interface EnrichmentRunPlan {
@@ -29,6 +30,40 @@ export interface EnrichmentRunResult {
   stderr: string;
 }
 
+export interface RefreshScopeSnapshot {
+  total: number;
+  mappedCount: number;
+  retainedOnly: number;
+  categories: string[];
+}
+
+export interface RefreshScopeComparison {
+  hasCurrentBaseline: boolean;
+  currentBaseline?: RefreshScopeSnapshot;
+  refreshedBaseline: RefreshScopeSnapshot;
+  totalIncrease: number;
+  mappedIncrease: number;
+  retainedOnlyIncrease: number;
+  totalRatio?: number;
+  mappedRatio?: number;
+  addedCategories: string[];
+}
+
+export interface RefreshScopeDriftResult {
+  detected: boolean;
+  reasons: string[];
+  comparison: RefreshScopeComparison;
+}
+
+export interface RefreshBaselinePromotionResult {
+  currentBaseline?: DiagnosticsContract;
+  refreshedBaseline: DiagnosticsContract;
+  comparison: RefreshScopeComparison;
+  drift: RefreshScopeDriftResult;
+  promoted: boolean;
+  activeDiagnosticsPath: string;
+}
+
 export interface BuildEnrichmentRunPlanOptions {
   extensionRoot: string;
   pythonInterpreter: string;
@@ -43,8 +78,48 @@ export interface EnrichmentPermission {
   reason?: string;
 }
 
+export interface RunEnrichmentPlanOptions {
+  promoteLatest?: boolean;
+}
+
 function pad(value: number): string {
   return String(value).padStart(2, '0');
+}
+
+function summarizeRefreshScope(contract: DiagnosticsContract): RefreshScopeSnapshot {
+  return {
+    total: contract.summary.total,
+    mappedCount: contract.summary.mappedCount,
+    retainedOnly: contract.summary.retainedOnly,
+    categories: Object.keys(contract.summary.byCategory).sort(),
+  };
+}
+
+function computeGrowthRatio(previousCount: number, nextCount: number): number | undefined {
+  if (previousCount <= 0) {
+    return undefined;
+  }
+
+  return nextCount / previousCount;
+}
+
+function formatScopeSnapshot(snapshot: RefreshScopeSnapshot): string {
+  return `${snapshot.total} total, ${snapshot.mappedCount} mapped/publishable, ${snapshot.retainedOnly} retained-only, categories: ${snapshot.categories.join(', ') || 'none'}`;
+}
+
+async function loadCurrentBaselineContract(
+  currentBaselinePath: string,
+): Promise<DiagnosticsContract | undefined> {
+  try {
+    return await loadDiagnosticsFromPath(currentBaselinePath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code === 'ENOENT') {
+      return undefined;
+    }
+
+    throw error;
+  }
 }
 
 export function buildRunId(now: Date): string {
@@ -57,6 +132,132 @@ export function buildRunId(now: Date): string {
     pad(now.getMinutes()),
     pad(now.getSeconds()),
   ].join('');
+}
+
+export function buildRefreshScopeComparison(
+  currentBaseline: DiagnosticsContract | undefined,
+  refreshedBaseline: DiagnosticsContract,
+): RefreshScopeComparison {
+  const refreshedSnapshot = summarizeRefreshScope(refreshedBaseline);
+  const currentSnapshot = currentBaseline ? summarizeRefreshScope(currentBaseline) : undefined;
+  const addedCategories = refreshedSnapshot.categories.filter(
+    (category) => !currentSnapshot?.categories.includes(category),
+  );
+
+  return {
+    hasCurrentBaseline: currentSnapshot !== undefined,
+    currentBaseline: currentSnapshot,
+    refreshedBaseline: refreshedSnapshot,
+    totalIncrease: refreshedSnapshot.total - (currentSnapshot?.total ?? 0),
+    mappedIncrease: refreshedSnapshot.mappedCount - (currentSnapshot?.mappedCount ?? 0),
+    retainedOnlyIncrease: refreshedSnapshot.retainedOnly - (currentSnapshot?.retainedOnly ?? 0),
+    totalRatio: computeGrowthRatio(currentSnapshot?.total ?? 0, refreshedSnapshot.total),
+    mappedRatio: computeGrowthRatio(currentSnapshot?.mappedCount ?? 0, refreshedSnapshot.mappedCount),
+    addedCategories,
+  };
+}
+
+export function detectRefreshScopeDrift(
+  comparison: RefreshScopeComparison,
+): RefreshScopeDriftResult {
+  if (!comparison.hasCurrentBaseline || !comparison.currentBaseline) {
+    return {
+      detected: false,
+      reasons: [],
+      comparison,
+    };
+  }
+
+  const reasons: string[] = [];
+
+  if ((comparison.totalRatio ?? 0) > 2 && comparison.totalIncrease >= 50) {
+    reasons.push(
+      `total issues grew from ${comparison.currentBaseline.total} to ${comparison.refreshedBaseline.total}`,
+    );
+  }
+
+  if ((comparison.mappedRatio ?? 0) > 2 && comparison.mappedIncrease >= 50) {
+    reasons.push(
+      `mapped/publishable issues grew from ${comparison.currentBaseline.mappedCount} to ${comparison.refreshedBaseline.mappedCount}`,
+    );
+  }
+
+  if (
+    comparison.retainedOnlyIncrease >= 50 &&
+    comparison.refreshedBaseline.retainedOnly >= 50
+  ) {
+    reasons.push(
+      `retained-only issues grew from ${comparison.currentBaseline.retainedOnly} to ${comparison.refreshedBaseline.retainedOnly}`,
+    );
+  }
+
+  return {
+    detected: comparison.addedCategories.length > 0 && reasons.length > 0,
+    reasons,
+    comparison,
+  };
+}
+
+export function formatRefreshScopeDriftWarning(
+  projectLabel: string,
+  drift: RefreshScopeDriftResult,
+): string {
+  if (!drift.comparison.hasCurrentBaseline || !drift.comparison.currentBaseline) {
+    return `Sphinx Doctor refresh for ${projectLabel} did not find an existing baseline to compare.`;
+  }
+
+  const triggerText = drift.reasons.join('; ');
+  const addedCategoryText = drift.comparison.addedCategories.join(', ');
+
+  return [
+    `Sphinx Doctor refresh for ${projectLabel} found a much broader diagnostics universe and did not replace latest.json.`,
+    `Current baseline: ${formatScopeSnapshot(drift.comparison.currentBaseline)}.`,
+    `Refreshed run: ${formatScopeSnapshot(drift.comparison.refreshedBaseline)}.`,
+    `Added categories: ${addedCategoryText}.`,
+    `Trigger: ${triggerText}.`,
+  ].join(' ');
+}
+
+export async function promoteDiagnosticsBaseline(
+  refreshedDiagnosticsPath: string,
+  latestOutputPath: string,
+): Promise<void> {
+  const normalizedRefreshedPath = path.resolve(refreshedDiagnosticsPath);
+  const normalizedLatestPath = path.resolve(latestOutputPath);
+  if (normalizedRefreshedPath === normalizedLatestPath) {
+    return;
+  }
+
+  await fs.mkdir(path.dirname(normalizedLatestPath), { recursive: true });
+  await fs.copyFile(normalizedRefreshedPath, normalizedLatestPath);
+}
+
+export async function evaluateRefreshBaselinePromotion(
+  options: {
+    currentBaselinePath: string;
+    refreshedDiagnosticsPath: string;
+    latestOutputPath: string;
+  },
+): Promise<RefreshBaselinePromotionResult> {
+  const currentBaseline = await loadCurrentBaselineContract(options.currentBaselinePath);
+  const refreshedBaseline = await loadDiagnosticsFromPath(options.refreshedDiagnosticsPath);
+  const comparison = buildRefreshScopeComparison(currentBaseline, refreshedBaseline);
+  const drift = detectRefreshScopeDrift(comparison);
+
+  if (!drift.detected) {
+    await promoteDiagnosticsBaseline(options.refreshedDiagnosticsPath, options.latestOutputPath);
+  }
+
+  return {
+    currentBaseline,
+    refreshedBaseline,
+    comparison,
+    drift,
+    promoted: !drift.detected,
+    activeDiagnosticsPath: drift.detected
+      ? options.currentBaselinePath
+      : options.latestOutputPath,
+  };
 }
 
 export function getEnrichmentPermission(
@@ -193,7 +394,10 @@ function executeProcess(
   });
 }
 
-export async function runEnrichmentPlan(plan: EnrichmentRunPlan): Promise<EnrichmentRunResult> {
+export async function runEnrichmentPlan(
+  plan: EnrichmentRunPlan,
+  options: RunEnrichmentPlanOptions = {},
+): Promise<EnrichmentRunResult> {
   await fs.mkdir(plan.runDirectoryPath, { recursive: true });
   await fs.mkdir(path.dirname(plan.latestOutputPath), { recursive: true });
 
@@ -203,7 +407,9 @@ export async function runEnrichmentPlan(plan: EnrichmentRunPlan): Promise<Enrich
     throw new Error(`Enrichment exited with code ${execution.exitCode}: ${detail}`);
   }
 
-  await fs.copyFile(plan.archiveOutputPath, plan.latestOutputPath);
+  if (options.promoteLatest !== false) {
+    await fs.copyFile(plan.archiveOutputPath, plan.latestOutputPath);
+  }
 
   return {
     plan,

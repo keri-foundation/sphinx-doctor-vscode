@@ -123,10 +123,14 @@ For a configured or discovered project, the command now runs this pipeline:
 1. resolve an explicit or conservative inferred refresh command
 2. run the external inventory producer in a trusted workspace
 3. locate a fresh compatible output artifact written after the refresh started
-4. enrich raw `issues.json` into `.sphinx-diagnostics/latest.json` when needed
-5. publish the resulting diagnostics into VS Code Problems
+4. enrich raw `issues.json` into a run archive under `.sphinx-diagnostics/runs/<run-id>/enriched.json` when needed
+5. compare the refreshed enriched run to the current `.sphinx-diagnostics/latest.json` baseline before promotion
+6. promote to `.sphinx-diagnostics/latest.json` only when the refreshed run does not represent major scope drift
+7. publish the resulting diagnostics into VS Code Problems
 
 The command refuses to bind stale inventory files from older runs, and it keeps the existing compatibility checks that reject artifacts generated for a different source workspace folder or worktree.
+
+If a refresh finds a much broader diagnostics universe than the current baseline, Sphinx Doctor preserves the new run archive for inspection but does not silently replace `.sphinx-diagnostics/latest.json`.
 
 ## Coverage Model
 

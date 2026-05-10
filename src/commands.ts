@@ -22,6 +22,8 @@ import {
 import { loadAllDiscoveredDiagnostics } from './loadAllDiagnostics';
 import {
   buildEnrichmentRunPlan,
+  evaluateRefreshBaselinePromotion,
+  formatRefreshScopeDriftWarning,
   getEnrichmentPermission,
   runEnrichmentPlan,
 } from './enrichmentRunner';
@@ -591,6 +593,25 @@ function logProcessOutput(
   logger.debug(`${label}: ${lines}`);
 }
 
+function resolveProjectLatestDiagnosticsPath(
+  project: ConfiguredProject,
+  workspaceFolders: WorkspaceFolderInfo[],
+): string {
+  const sourceFolder = findWorkspaceFolderByName(workspaceFolders, project.sourceWorkspaceFolder);
+  if (!sourceFolder) {
+    throw new Error(
+      `Source workspace folder "${project.sourceWorkspaceFolder}" could not be resolved for project ${project.id}.`,
+    );
+  }
+
+  return path.resolve(
+    sourceFolder.fsPath,
+    project.repoRoot ?? '.',
+    project.mirrorRoot ?? '.sphinx-diagnostics',
+    'latest.json',
+  );
+}
+
 async function runRefreshAndLoadProjectDiagnostics(
   context: vscode.ExtensionContext,
   dependencies: CommandDependencies,
@@ -664,7 +685,26 @@ async function runRefreshAndLoadProjectDiagnostics(
   }
 
   if (refreshedDiagnostics.kind === 'enriched') {
-    await loadSelectedProjectDiagnostics(context, dependencies, refreshedDiagnostics);
+    const latestOutputPath = resolveProjectLatestDiagnosticsPath(project, workspaceFolders);
+    const promotion = await evaluateRefreshBaselinePromotion({
+      currentBaselinePath: latestOutputPath,
+      refreshedDiagnosticsPath: refreshedDiagnostics.candidate.filePath,
+      latestOutputPath,
+    });
+
+    if (promotion.drift.detected) {
+      const warning = `${formatRefreshScopeDriftWarning(projectLabel(project), promotion.drift)} Refreshed run preserved at ${refreshedDiagnostics.candidate.filePath}.`;
+      dependencies.logger.warn(warning);
+      void vscode.window.showWarningMessage(warning);
+      return;
+    }
+
+    await loadAndPublish(context, vscode.Uri.file(promotion.activeDiagnosticsPath), dependencies, {
+      replaceMode: 'project',
+      projectKey: project.id,
+      defaultSourceWorkspaceFolderOverride: project.sourceWorkspaceFolder,
+      defaultRepoRootOverride: project.repoRoot,
+    });
     return;
   }
 
@@ -698,9 +738,9 @@ async function runRefreshAndLoadProjectDiagnostics(
           `Enriching refreshed diagnostics with ${plan.command} in ${plan.cwd}; raw ${plan.rawIssuesPath}; archive ${plan.archiveOutputPath}; latest ${plan.latestOutputPath}.`,
         );
 
-        const result = await runEnrichmentPlan(plan);
+        const result = await runEnrichmentPlan(plan, { promoteLatest: false });
         dependencies.logger.info(
-          `Refresh enrichment completed with exit code ${result.exitCode}; raw ${result.plan.rawIssuesPath}; latest ${result.plan.latestOutputPath}.`,
+          `Refresh enrichment completed with exit code ${result.exitCode}; raw ${result.plan.rawIssuesPath}; archive ${result.plan.archiveOutputPath}; latest ${result.plan.latestOutputPath}.`,
         );
         logProcessOutput(dependencies.logger, 'Refresh enrichment stdout', result.stdout);
         logProcessOutput(dependencies.logger, 'Refresh enrichment stderr', result.stderr);
@@ -708,9 +748,22 @@ async function runRefreshAndLoadProjectDiagnostics(
       },
     );
 
+    const promotion = await evaluateRefreshBaselinePromotion({
+      currentBaselinePath: enrichmentResult.plan.latestOutputPath,
+      refreshedDiagnosticsPath: enrichmentResult.plan.archiveOutputPath,
+      latestOutputPath: enrichmentResult.plan.latestOutputPath,
+    });
+
+    if (promotion.drift.detected) {
+      const warning = `${formatRefreshScopeDriftWarning(projectLabel(project), promotion.drift)} Refreshed run preserved at ${enrichmentResult.plan.archiveOutputPath}.`;
+      dependencies.logger.warn(warning);
+      void vscode.window.showWarningMessage(warning);
+      return;
+    }
+
     await loadAndPublish(
       context,
-      vscode.Uri.file(enrichmentResult.plan.latestOutputPath),
+      vscode.Uri.file(promotion.activeDiagnosticsPath),
       dependencies,
       {
         replaceMode: 'project',

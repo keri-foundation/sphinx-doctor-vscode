@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import {
   buildEnrichmentRunPlan,
   buildRunId,
+  buildRefreshScopeComparison,
+  detectRefreshScopeDrift,
+  evaluateRefreshBaselinePromotion,
+  formatRefreshScopeDriftWarning,
   getEnrichmentPermission,
 } from '../src/enrichmentRunner';
 import {
@@ -262,6 +267,27 @@ const unknownIssuesFilePayload = {
     },
   ],
 };
+
+function buildSummaryContract(options: {
+  total: number;
+  mappedCount: number;
+  retainedOnly: number;
+  byCategory: Record<string, number>;
+}): DiagnosticsContract {
+  return {
+    ...contract,
+    summary: {
+      total: options.total,
+      bySeverity: { error: options.total },
+      byCategory: options.byCategory,
+      mappedCount: options.mappedCount,
+      unmappedCount: Math.max(0, options.total - options.mappedCount),
+      publishedDiagnostics: options.mappedCount,
+      retainedOnly: options.retainedOnly,
+    },
+    issues: [],
+  };
+}
 
 test('normalizeSeverityName collapses non-error severities for the extension', () => {
   assert.equal(normalizeSeverityName('error'), 'error');
@@ -955,6 +981,158 @@ test('buildEnrichmentRunPlan uses explicit roots and never collapses source into
   assert.notEqual(plan.sourceRoot, plan.inventoryRoot);
   assert.equal(plan.docsRoot, 'docs');
   assert.equal(plan.mirrorRoot, '.sphinx-diagnostics');
+});
+
+test('refresh-scope drift detection catches the Keripy narrow-to-broad repro', () => {
+  const currentBaseline = buildSummaryContract({
+    total: 193,
+    mappedCount: 193,
+    retainedOnly: 0,
+    byCategory: { 'unexpected-indentation': 193 },
+  });
+  const refreshedBaseline = buildSummaryContract({
+    total: 1236,
+    mappedCount: 831,
+    retainedOnly: 405,
+    byCategory: {
+      'unexpected-indentation': 193,
+      'missing-reference': 805,
+      'block-quote-unindent': 154,
+      'definition-list-unindent': 51,
+      other: 16,
+    },
+  });
+
+  const comparison = buildRefreshScopeComparison(currentBaseline, refreshedBaseline);
+  const drift = detectRefreshScopeDrift(comparison);
+
+  assert.equal(drift.detected, true);
+  assert.match(
+    formatRefreshScopeDriftWarning('keripy', drift),
+    /did not replace latest\.json/i,
+  );
+  assert.ok(
+    drift.reasons.some((reason) => reason.includes('193') && reason.includes('1236')),
+  );
+  assert.deepEqual(comparison.addedCategories, [
+    'block-quote-unindent',
+    'definition-list-unindent',
+    'missing-reference',
+    'other',
+  ]);
+});
+
+test('refresh-scope drift detection ignores modest same-scope growth', () => {
+  const currentBaseline = buildSummaryContract({
+    total: 120,
+    mappedCount: 120,
+    retainedOnly: 0,
+    byCategory: { 'unexpected-indentation': 120 },
+  });
+  const refreshedBaseline = buildSummaryContract({
+    total: 145,
+    mappedCount: 145,
+    retainedOnly: 0,
+    byCategory: { 'unexpected-indentation': 145 },
+  });
+
+  const drift = detectRefreshScopeDrift(
+    buildRefreshScopeComparison(currentBaseline, refreshedBaseline),
+  );
+
+  assert.equal(drift.detected, false);
+  assert.deepEqual(drift.reasons, []);
+});
+
+test('refresh-scope drift detection requires category expansion plus large count growth', () => {
+  const currentBaseline = buildSummaryContract({
+    total: 100,
+    mappedCount: 100,
+    retainedOnly: 0,
+    byCategory: { 'unexpected-indentation': 100 },
+  });
+  const refreshedBaseline = buildSummaryContract({
+    total: 260,
+    mappedCount: 240,
+    retainedOnly: 20,
+    byCategory: {
+      'unexpected-indentation': 180,
+      'block-quote-unindent': 80,
+    },
+  });
+
+  const drift = detectRefreshScopeDrift(
+    buildRefreshScopeComparison(currentBaseline, refreshedBaseline),
+  );
+
+  assert.equal(drift.detected, true);
+  assert.deepEqual(drift.comparison.addedCategories, ['block-quote-unindent']);
+  assert.ok(drift.reasons.some((reason) => reason.includes('mapped/publishable')));
+});
+
+test('refresh-scope drift detection catches retained-only spikes with new categories', () => {
+  const currentBaseline = buildSummaryContract({
+    total: 110,
+    mappedCount: 110,
+    retainedOnly: 0,
+    byCategory: { 'unexpected-indentation': 110 },
+  });
+  const refreshedBaseline = buildSummaryContract({
+    total: 260,
+    mappedCount: 140,
+    retainedOnly: 120,
+    byCategory: {
+      'unexpected-indentation': 110,
+      'missing-reference': 150,
+    },
+  });
+
+  const drift = detectRefreshScopeDrift(
+    buildRefreshScopeComparison(currentBaseline, refreshedBaseline),
+  );
+
+  assert.equal(drift.detected, true);
+  assert.ok(drift.reasons.some((reason) => reason.includes('retained-only')));
+});
+
+test('refresh baseline promotion preserves the archive and keeps latest.json unchanged when drift is detected', async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'sphinx-doctor-refresh-'));
+  const latestPath = path.join(tempRoot, 'latest.json');
+  const archivePath = path.join(tempRoot, 'runs', '20260510-151209', 'enriched.json');
+
+  const currentBaseline = buildSummaryContract({
+    total: 193,
+    mappedCount: 193,
+    retainedOnly: 0,
+    byCategory: { 'unexpected-indentation': 193 },
+  });
+  const refreshedBaseline = buildSummaryContract({
+    total: 1236,
+    mappedCount: 831,
+    retainedOnly: 405,
+    byCategory: {
+      'unexpected-indentation': 193,
+      'missing-reference': 805,
+      'block-quote-unindent': 154,
+      'definition-list-unindent': 51,
+    },
+  });
+
+  await writeFile(latestPath, JSON.stringify(currentBaseline, null, 2));
+  await mkdir(path.dirname(archivePath), { recursive: true });
+  await writeFile(archivePath, JSON.stringify(refreshedBaseline, null, 2));
+
+  const result = await evaluateRefreshBaselinePromotion({
+    currentBaselinePath: latestPath,
+    refreshedDiagnosticsPath: archivePath,
+    latestOutputPath: latestPath,
+  });
+
+  assert.equal(result.promoted, false);
+  assert.equal(result.activeDiagnosticsPath, latestPath);
+  assert.equal(result.drift.detected, true);
+  assert.equal(await readFile(archivePath, 'utf8'), JSON.stringify(refreshedBaseline, null, 2));
+  assert.equal(await readFile(latestPath, 'utf8'), JSON.stringify(currentBaseline, null, 2));
 });
 
 test('getRefreshPermission blocks missing, disabled, or untrusted refresh execution', () => {
