@@ -26,7 +26,12 @@ import {
 } from './loadDiagnostics';
 import { SphinxDoctorLogger } from './log';
 import { DiagnosticsPublicationIndex } from './publicationIndex';
-import { publishDiagnosticsBatch, PublishBatchEntry, PublishResult } from './publishDiagnostics';
+import {
+  computeDiagnosticsAccounting,
+  publishDiagnosticsBatch,
+  PublishBatchEntry,
+  PublishResult,
+} from './publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, listGitWorktreesPorcelain, mergeProjects } from './projectDiscovery';
 import { SELF_TEST_STATUS_TEXT } from './selfTest';
 import {
@@ -51,8 +56,17 @@ import {
   formatWatchModeText,
   formatWatchModeTooltip,
   hasOpenWorkspaceFolders,
+  ProjectPublicationSnapshot,
   runWatchModeStartup,
+  summarizeProjectPublicationSnapshots,
 } from './watchModeState';
+
+const NOOP_PUBLISH_LOGGER = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
 
 interface DiscoveredInventoryCandidate {
   uri: vscode.Uri;
@@ -191,6 +205,10 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
   private readonly projectRefreshSingleFlight = createSingleFlightController();
 
+  private readonly lastProjectPublications = new Map<string, ProjectPublicationSnapshot>();
+
+  private readonly suppressedWatchPaths = new Map<string, number>();
+
   private activated = false;
 
   private lastRefreshReason = 'not-run';
@@ -218,6 +236,10 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
   private lastSkippedCount = 0;
 
   private lastResolutionFailureCount = 0;
+
+  private lastRawPendingCount = 0;
+
+  private lastErrorCount = 0;
 
   private readonly lastProjectStatuses = new Map<string, string>();
 
@@ -313,6 +335,9 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       this.lastFilteredByModeCount = 0;
       this.lastSkippedCount = 0;
       this.lastResolutionFailureCount = 0;
+      this.lastRawPendingCount = 0;
+      this.lastErrorCount = 0;
+      this.lastProjectPublications.clear();
       this.lastProjectStatuses.clear();
       this.applySummary(
         buildWatchModeSummary({
@@ -375,9 +400,14 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       this.lastKnownProjectIds = [];
       this.lastLoadedDiagnosticsFiles = [];
       this.lastIssueCount = 0;
+      this.lastPublishableBeforeFilterCount = 0;
       this.lastPublishedCount = 0;
+      this.lastFilteredByModeCount = 0;
       this.lastSkippedCount = 0;
       this.lastResolutionFailureCount = 0;
+      this.lastRawPendingCount = 0;
+      this.lastErrorCount = 0;
+      this.lastProjectPublications.clear();
       this.applySummary(summary);
       return;
     }
@@ -435,6 +465,16 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     );
 
     if (!loadDiagnostics) {
+      this.lastProjectPublications.clear();
+      this.lastLoadedDiagnosticsFiles = [];
+      this.lastIssueCount = 0;
+      this.lastPublishableBeforeFilterCount = 0;
+      this.lastPublishedCount = 0;
+      this.lastFilteredByModeCount = 0;
+      this.lastSkippedCount = 0;
+      this.lastResolutionFailureCount = 0;
+      this.lastRawPendingCount = 0;
+      this.lastErrorCount = 0;
       this.applySummary(
         buildWatchModeSummary({
           projectCount: projects.length,
@@ -453,6 +493,19 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         }),
       );
       return;
+    }
+
+    this.lastProjectPublications.clear();
+    for (const project of projects) {
+      this.lastProjectPublications.set(project.id, {
+        loaded: false,
+        issueCount: 0,
+        publishableBeforeFilter: 0,
+        publishedDiagnostics: 0,
+        filteredByMode: 0,
+        skippedIssues: 0,
+        resolutionFailures: 0,
+      });
     }
 
     const entries: PreparedProjectEntry[] = [];
@@ -521,13 +574,41 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       this.publicationIndex.clear(this.collection);
     }
 
-    this.lastLoadedDiagnosticsFiles = entries.map((entry) => entry.loadedPath);
-    this.lastIssueCount = publishResult.issueCount;
-  this.lastPublishableBeforeFilterCount = publishResult.publishableBeforeFilter;
-    this.lastPublishedCount = publishResult.publishedDiagnostics;
-  this.lastFilteredByModeCount = publishResult.filteredByMode;
-    this.lastSkippedCount = publishResult.skippedIssues;
-    this.lastResolutionFailureCount = publishResult.resolutionFailures;
+    for (const entry of entries) {
+      const accounting = computeDiagnosticsAccounting(entry.contract, {
+        workspaceFolders: vscode.workspace.workspaceFolders,
+        diagnosticMode: config.diagnosticsMode,
+        defaultSourceWorkspaceFolder: entry.defaultSourceWorkspaceFolder,
+        defaultRepoRoot: entry.defaultRepoRoot,
+        fixtureSourceRoot: entry.fixtureSourceRoot,
+        allowFirstFolderFallback: entry.allowFirstFolderFallback,
+        logger: NOOP_PUBLISH_LOGGER,
+      });
+      this.lastProjectPublications.set(entry.project.id, {
+        loaded: true,
+        loadedPath: entry.loadedPath,
+        issueCount: accounting.issueCount,
+        publishableBeforeFilter: accounting.publishableBeforeFilter,
+        publishedDiagnostics: accounting.publishedDiagnostics,
+        filteredByMode: accounting.filteredByMode,
+        skippedIssues: accounting.skippedIssues,
+        resolutionFailures: accounting.resolutionFailures,
+      });
+    }
+
+    this.lastRawPendingCount = rawPendingCount;
+    this.lastErrorCount = errorCount;
+    this.applyAggregateState({
+      projectCount: projects.length,
+      diagnosticMode: config.diagnosticsMode,
+      watcherCount: this.watchers.size,
+      rawPendingCount,
+      errorCount,
+      message:
+        errorCount > 0
+          ? 'Sphinx Doctor watch mode hit an error. Check the output channel.'
+          : undefined,
+    });
 
     if (entries.length > 0) {
       this.logger.info(
@@ -536,23 +617,6 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     } else {
       this.logger.warn('No diagnostics files were loaded for any known project during this refresh.');
     }
-
-    const summary = buildWatchModeSummary({
-      projectCount: projects.length,
-      loadedProjectCount: entries.length,
-      issueCount: publishResult.issueCount,
-      publishableBeforeFilter: publishResult.publishableBeforeFilter,
-      publishedDiagnostics: publishResult.publishedDiagnostics,
-      watcherCount: this.watchers.size,
-      rawPendingCount,
-      errorCount,
-      diagnosticMode: config.diagnosticsMode,
-      message:
-        errorCount > 0
-          ? 'Sphinx Doctor watch mode hit an error. Check the output channel.'
-          : undefined,
-    });
-    this.applySummary(summary);
     this.logger.info(
       `Watch refresh completed (${reason}): mode=${config.diagnosticsMode}; loaded ${entries.length} files, ${publishResult.issueCount} issues, ${publishResult.publishableBeforeFilter} publishable before filter, ${publishResult.publishedDiagnostics} published diagnostics across ${publishResult.targetUriCount} target URIs, ${publishResult.filteredByMode} filtered by mode, ${publishResult.skippedIssues} skipped, ${publishResult.resolutionFailures} resolution failures, ${this.watchers.size} watchers.`,
     );
@@ -703,6 +767,119 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       trigger.dispose();
     }
     this.autoRefreshTriggers.clear();
+  }
+
+  private applyAggregateState(options: {
+    projectCount: number;
+    diagnosticMode: ExtensionConfig['diagnosticsMode'];
+    watcherCount: number;
+    rawPendingCount: number;
+    errorCount: number;
+    message?: string;
+  }): void {
+    const aggregate = summarizeProjectPublicationSnapshots(this.lastProjectPublications.values());
+
+    this.lastLoadedDiagnosticsFiles = aggregate.loadedDiagnosticsFiles;
+    this.lastIssueCount = aggregate.issueCount;
+    this.lastPublishableBeforeFilterCount = aggregate.publishableBeforeFilter;
+    this.lastPublishedCount = aggregate.publishedDiagnostics;
+    this.lastFilteredByModeCount = aggregate.filteredByMode;
+    this.lastSkippedCount = aggregate.skippedIssues;
+    this.lastResolutionFailureCount = aggregate.resolutionFailures;
+
+    this.applySummary(
+      buildWatchModeSummary({
+        projectCount: options.projectCount,
+        loadedProjectCount: aggregate.loadedProjectCount,
+        issueCount: aggregate.issueCount,
+        publishableBeforeFilter: aggregate.publishableBeforeFilter,
+        publishedDiagnostics: aggregate.publishedDiagnostics,
+        watcherCount: options.watcherCount,
+        rawPendingCount: options.rawPendingCount,
+        errorCount: options.errorCount,
+        diagnosticMode: options.diagnosticMode,
+        message: options.message,
+      }),
+    );
+  }
+
+  private suppressWatchEvents(filePaths: string[]): void {
+    const expiresAt = Date.now() + 2000;
+    for (const filePath of filePaths) {
+      this.suppressedWatchPaths.set(path.resolve(filePath), expiresAt);
+    }
+  }
+
+  private shouldSuppressWatchEvent(filePath: string): boolean {
+    const normalizedPath = path.resolve(filePath);
+    const expiresAt = this.suppressedWatchPaths.get(normalizedPath);
+    if (expiresAt === undefined) {
+      return false;
+    }
+
+    if (expiresAt < Date.now()) {
+      this.suppressedWatchPaths.delete(normalizedPath);
+      return false;
+    }
+
+    return true;
+  }
+
+  private async publishProjectDiagnosticsFromPath(
+    project: ConfiguredProject,
+    diagnosticsPath: string,
+    reason: string,
+  ): Promise<void> {
+    const config = getExtensionConfig();
+    const contract = await loadDiagnosticsFromPath(diagnosticsPath);
+    const result = publishDiagnosticsBatch(
+      this.collection,
+      [
+        {
+          contract,
+          projectKey: project.id,
+          defaultSourceWorkspaceFolder: project.sourceWorkspaceFolder,
+          defaultRepoRoot: project.repoRoot,
+        },
+      ],
+      {
+        workspaceFolders: vscode.workspace.workspaceFolders,
+        diagnosticMode: config.diagnosticsMode,
+        replaceMode: 'project',
+        publicationIndex: this.publicationIndex,
+        logger: this.logger,
+      },
+    );
+
+    this.lastRefreshReason = reason;
+    this.lastError = undefined;
+    this.lastProjectPublications.set(project.id, {
+      loaded: true,
+      loadedPath: diagnosticsPath,
+      issueCount: result.issueCount,
+      publishableBeforeFilter: result.publishableBeforeFilter,
+      publishedDiagnostics: result.publishedDiagnostics,
+      filteredByMode: result.filteredByMode,
+      skippedIssues: result.skippedIssues,
+      resolutionFailures: result.resolutionFailures,
+    });
+    this.lastRawPendingCount = 0;
+    this.lastErrorCount = 0;
+    this.applyAggregateState({
+      projectCount: this.lastKnownProjectIds.length || Math.max(this.summary.projectCount, 1),
+      diagnosticMode: config.diagnosticsMode,
+      watcherCount: this.watchers.size,
+      rawPendingCount: this.lastRawPendingCount,
+      errorCount: this.lastErrorCount,
+      message:
+        result.publishedDiagnostics > 0
+          ? `Watching ${this.lastKnownProjectIds.length || Math.max(this.summary.projectCount, 1)} projects in ${config.diagnosticsMode} mode with ${summarizeProjectPublicationSnapshots(this.lastProjectPublications.values()).issueCount} issues, ${summarizeProjectPublicationSnapshots(this.lastProjectPublications.values()).publishableBeforeFilter} publishable before filter, and ${summarizeProjectPublicationSnapshots(this.lastProjectPublications.values()).publishedDiagnostics} published diagnostics.`
+          : undefined,
+    });
+    this.setProjectStatus(
+      project.id,
+      `${reason} published ${result.publishedDiagnostics} diagnostics from ${diagnosticsPath}.`,
+    );
   }
 
   private setProjectStatus(projectId: string, status: string): void {
@@ -1179,7 +1356,15 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
           project.id,
           `${reason} promoted enriched diagnostics to ${promotion.activeDiagnosticsPath}.`,
         );
-        this.scheduleRefresh(`${reason}: enriched artifact changed`);
+        this.suppressWatchEvents([
+          refreshed.candidate.filePath,
+          promotion.activeDiagnosticsPath,
+        ]);
+        await this.publishProjectDiagnosticsFromPath(
+          project,
+          promotion.activeDiagnosticsPath,
+          `${reason}: project-scoped republish`,
+        );
         return;
       }
 
@@ -1221,7 +1406,16 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       }
 
       this.setProjectStatus(project.id, `${reason} wrote ${promotion.activeDiagnosticsPath}.`);
-      this.scheduleRefresh(`${reason}: latest.json changed`);
+      this.suppressWatchEvents([
+        refreshed.candidate.filePath,
+        enrichmentPlan.archiveOutputPath,
+        promotion.activeDiagnosticsPath,
+      ]);
+      await this.publishProjectDiagnosticsFromPath(
+        project,
+        promotion.activeDiagnosticsPath,
+        `${reason}: project-scoped republish`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.lastError = message;
@@ -1330,6 +1524,10 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         new vscode.RelativePattern(pattern.basePath, pattern.glob),
       );
       const handleEvent = (uri: vscode.Uri): void => {
+        if (this.shouldSuppressWatchEvent(uri.fsPath)) {
+          this.logger.debug(`Ignoring internal watch event for ${uri.fsPath}`);
+          return;
+        }
         this.logger.debug(`Watch event for ${uri.fsPath}`);
         this.scheduleRefresh(`artifact changed: ${path.basename(uri.fsPath)}`);
       };

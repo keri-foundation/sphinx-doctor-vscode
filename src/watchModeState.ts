@@ -32,6 +32,28 @@ export interface RefreshOnSaveDecision {
   project?: ConfiguredProject;
 }
 
+export interface ProjectPublicationSnapshot {
+  loaded: boolean;
+  loadedPath?: string;
+  issueCount: number;
+  publishableBeforeFilter: number;
+  publishedDiagnostics: number;
+  filteredByMode: number;
+  skippedIssues: number;
+  resolutionFailures: number;
+}
+
+export interface ProjectPublicationSummary {
+  loadedProjectCount: number;
+  loadedDiagnosticsFiles: string[];
+  issueCount: number;
+  publishableBeforeFilter: number;
+  publishedDiagnostics: number;
+  filteredByMode: number;
+  skippedIssues: number;
+  resolutionFailures: number;
+}
+
 export interface WatchModeStartupOptions {
   config: Pick<ExtensionConfig, 'watchEnabled' | 'watchAutoLoadOnStartup'>;
   refresh(reason: string, loadDiagnostics: boolean): Promise<void>;
@@ -207,6 +229,48 @@ export function getRefreshOnSaveDebounceMs(
   config: Pick<ExtensionConfig, 'watchDebounceMs' | 'refreshDebounceMs'>,
 ): number {
   return config.refreshDebounceMs;
+}
+
+export function summarizeProjectPublicationSnapshots(
+  snapshots: Iterable<ProjectPublicationSnapshot>,
+): ProjectPublicationSummary {
+  let loadedProjectCount = 0;
+  let issueCount = 0;
+  let publishableBeforeFilter = 0;
+  let publishedDiagnostics = 0;
+  let filteredByMode = 0;
+  let skippedIssues = 0;
+  let resolutionFailures = 0;
+  const loadedDiagnosticsFiles: string[] = [];
+
+  for (const snapshot of snapshots) {
+    if (snapshot.loaded) {
+      loadedProjectCount += 1;
+      if (snapshot.loadedPath) {
+        loadedDiagnosticsFiles.push(snapshot.loadedPath);
+      }
+    }
+
+    issueCount += snapshot.issueCount;
+    publishableBeforeFilter += snapshot.publishableBeforeFilter;
+    publishedDiagnostics += snapshot.publishedDiagnostics;
+    filteredByMode += snapshot.filteredByMode;
+    skippedIssues += snapshot.skippedIssues;
+    resolutionFailures += snapshot.resolutionFailures;
+  }
+
+  loadedDiagnosticsFiles.sort();
+
+  return {
+    loadedProjectCount,
+    loadedDiagnosticsFiles,
+    issueCount,
+    publishableBeforeFilter,
+    publishedDiagnostics,
+    filteredByMode,
+    skippedIssues,
+    resolutionFailures,
+  };
 }
 
 export function createSingleFlightController(): SingleFlightController {

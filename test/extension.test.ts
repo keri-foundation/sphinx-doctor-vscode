@@ -70,6 +70,7 @@ import {
   hasOpenWorkspaceFolders,
   isExcludedWorkspaceFolder,
   isRelevantRefreshSavePath,
+  summarizeProjectPublicationSnapshots,
   runWatchModeStartup,
 } from '../src/watchModeState';
 import {
@@ -837,6 +838,97 @@ test('publication index project replacement leaves other projects untouched', ()
   assert.deepEqual(operations, ['delete:file:///a1.py']);
   assert.deepEqual(index.getPublishedTargetKeys('keripy'), ['file:///a2.py']);
   assert.deepEqual(index.getPublishedTargetKeys('hio'), ['file:///b1.py']);
+});
+
+test('project publication summaries preserve unrelated project counts during a scoped refresh', () => {
+  const before = summarizeProjectPublicationSnapshots([
+    {
+      loaded: true,
+      loadedPath: '/workspace/keripy/.sphinx-diagnostics/latest.json',
+      issueCount: 6,
+      publishableBeforeFilter: 4,
+      publishedDiagnostics: 3,
+      filteredByMode: 1,
+      skippedIssues: 3,
+      resolutionFailures: 0,
+    },
+    {
+      loaded: true,
+      loadedPath: '/workspace/hio/.sphinx-diagnostics/latest.json',
+      issueCount: 5,
+      publishableBeforeFilter: 3,
+      publishedDiagnostics: 2,
+      filteredByMode: 1,
+      skippedIssues: 3,
+      resolutionFailures: 0,
+    },
+  ]);
+
+  const after = summarizeProjectPublicationSnapshots([
+    {
+      loaded: true,
+      loadedPath: '/workspace/keripy/.sphinx-diagnostics/latest.json',
+      issueCount: 2,
+      publishableBeforeFilter: 1,
+      publishedDiagnostics: 1,
+      filteredByMode: 0,
+      skippedIssues: 1,
+      resolutionFailures: 0,
+    },
+    {
+      loaded: true,
+      loadedPath: '/workspace/hio/.sphinx-diagnostics/latest.json',
+      issueCount: 5,
+      publishableBeforeFilter: 3,
+      publishedDiagnostics: 2,
+      filteredByMode: 1,
+      skippedIssues: 3,
+      resolutionFailures: 0,
+    },
+  ]);
+
+  assert.equal(before.loadedProjectCount, 2);
+  assert.equal(before.issueCount, 11);
+  assert.equal(before.publishedDiagnostics, 5);
+  assert.equal(after.loadedProjectCount, 2);
+  assert.equal(after.issueCount, 7);
+  assert.equal(after.publishableBeforeFilter, 4);
+  assert.equal(after.publishedDiagnostics, 3);
+  assert.deepEqual(after.loadedDiagnosticsFiles, [
+    '/workspace/hio/.sphinx-diagnostics/latest.json',
+    '/workspace/keripy/.sphinx-diagnostics/latest.json',
+  ]);
+});
+
+test('project publication summaries drop stale diagnostics when a refreshed project no longer publishes any targets', () => {
+  const summary = summarizeProjectPublicationSnapshots([
+    {
+      loaded: false,
+      issueCount: 0,
+      publishableBeforeFilter: 0,
+      publishedDiagnostics: 0,
+      filteredByMode: 0,
+      skippedIssues: 0,
+      resolutionFailures: 0,
+    },
+    {
+      loaded: true,
+      loadedPath: '/workspace/hio/.sphinx-diagnostics/latest.json',
+      issueCount: 5,
+      publishableBeforeFilter: 3,
+      publishedDiagnostics: 2,
+      filteredByMode: 1,
+      skippedIssues: 3,
+      resolutionFailures: 0,
+    },
+  ]);
+
+  assert.equal(summary.loadedProjectCount, 1);
+  assert.deepEqual(summary.loadedDiagnosticsFiles, [
+    '/workspace/hio/.sphinx-diagnostics/latest.json',
+  ]);
+  assert.equal(summary.issueCount, 5);
+  assert.equal(summary.publishedDiagnostics, 2);
 });
 
 test('publication index deletes stale project targets that are no longer published', () => {
