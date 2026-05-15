@@ -1,0 +1,42 @@
+name: "Bug report"
+description: Report an issue with the Sphinx Doctor extension or its local VSIX workflow.
+title: "A concise description"
+labels: ["bug", "triage"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Extension version or commit under test.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, VS Code version, and whether this was Development, Production, or integration test mode.
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: troubleshoot-report
+    attributes:
+      label: Troubleshoot report summary
+      description: "Include the key lines from `Sphinx Doctor: Troubleshoot Environment` when relevant."
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true

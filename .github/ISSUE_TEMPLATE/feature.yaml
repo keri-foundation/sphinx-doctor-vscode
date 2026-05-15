@@ -1,0 +1,24 @@
+name: "Feature request"
+description: Propose an improvement to Sphinx Doctor workflows, diagnostics, or packaging.
+title: "A concise description"
+labels: ["feature request"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow gap
+      description: Describe the current limitation or friction.
+    validations:
+      required: true
+  - type: textarea
+    id: desired-behavior
+    attributes:
+      label: Requested behavior
+      description: Describe the desired user-facing outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Include workspace shape, Sphinx setup, or related docs if they matter.
