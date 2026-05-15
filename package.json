@@ -87,6 +87,10 @@
       {
         "command": "sphinxDoctor.showStatus",
         "title": "Sphinx Doctor: Show Status"
+      },
+      {
+        "command": "sphinxDoctor.troubleshootEnvironment",
+        "title": "Sphinx Doctor: Troubleshoot Environment"
       }
     ],
     "configuration": {

@@ -103,6 +103,34 @@ const NOOP_PUBLISH_LOGGER: PublishLogger = {
   error: () => {},
 };
 
+const TROUBLESHOOT_REPORTS_DIRECTORY = 'troubleshoot-reports';
+const TROUBLESHOOT_REPORT_FILENAME_PREFIX = 'troubleshoot-environment';
+
+function formatTroubleshootReportTimestamp(now: Date = new Date()): string {
+  const year = now.getFullYear().toString().padStart(4, '0');
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const hours = now.getHours().toString().padStart(2, '0');
+  const minutes = now.getMinutes().toString().padStart(2, '0');
+  const seconds = now.getSeconds().toString().padStart(2, '0');
+
+  return `${year}${month}${day}-${hours}${minutes}${seconds}`;
+}
+
+async function writeTroubleshootReport(
+  context: vscode.ExtensionContext,
+  reportContent: string,
+): Promise<vscode.Uri> {
+  const reportsDirectoryUri = vscode.Uri.joinPath(context.logUri, TROUBLESHOOT_REPORTS_DIRECTORY);
+  await vscode.workspace.fs.createDirectory(reportsDirectoryUri);
+
+  const reportFileName = `${TROUBLESHOOT_REPORT_FILENAME_PREFIX}-${formatTroubleshootReportTimestamp()}.md`;
+  const reportUri = vscode.Uri.joinPath(reportsDirectoryUri, reportFileName);
+  await vscode.workspace.fs.writeFile(reportUri, new TextEncoder().encode(reportContent));
+
+  return reportUri;
+}
+
 function logDiscoveryDecisions(
   logger: SphinxDoctorLogger,
   decisions: Array<{
@@ -1164,6 +1192,32 @@ export function registerCommands(
 
         dependencies.logger.show(true);
         void vscode.window.showInformationMessage('Sphinx Doctor is active, but watch mode is unavailable.');
+      });
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sphinxDoctor.troubleshootEnvironment', async () => {
+      await runSafely(dependencies.logger, 'Troubleshoot Environment', async () => {
+        if (!dependencies.watchMode) {
+          dependencies.logger.show(true);
+          void vscode.window.showInformationMessage(
+            'Sphinx Doctor is active, but watch mode is unavailable.',
+          );
+          return;
+        }
+
+        const reportContent = dependencies.watchMode.buildTroubleshootReport();
+        const reportUri = await writeTroubleshootReport(context, reportContent);
+        const document = await vscode.workspace.openTextDocument(reportUri);
+        const reportLocation = reportUri.fsPath || reportUri.toString();
+
+        dependencies.logger.info(`Saved troubleshoot report: ${reportLocation}`);
+        await vscode.window.showTextDocument(document, { preview: false });
+        vscode.window.setStatusBarMessage(
+          `Sphinx Doctor troubleshoot report saved: ${path.basename(reportLocation)}`,
+          5000,
+        );
       });
     }),
   );

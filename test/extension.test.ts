@@ -276,6 +276,42 @@ const unknownIssuesFilePayload = {
   ],
 };
 
+let cachedWatchModeModule: typeof import('../src/watchMode.js') | undefined;
+
+async function loadWatchModeModule(): Promise<typeof import('../src/watchMode.js')> {
+  if (cachedWatchModeModule) {
+    return cachedWatchModeModule;
+  }
+
+  const moduleLoader = require('node:module') as typeof import('node:module') & {
+    _load?: (request: string, parent: NodeModule | undefined, isMain: boolean) => unknown;
+  };
+  const originalLoad = moduleLoader._load;
+  assert.ok(originalLoad, 'Expected node module loader to be available for vscode stubbing.');
+
+  moduleLoader._load = ((request: string, parent: NodeModule | undefined, isMain: boolean) => {
+    if (request === 'vscode') {
+      return {
+        ExtensionMode: {
+          Production: 1,
+          Development: 2,
+          Test: 3,
+        },
+      };
+    }
+
+    return originalLoad(request, parent, isMain);
+  }) as typeof originalLoad;
+
+  try {
+    const module = await import('../src/watchMode.js');
+    cachedWatchModeModule = module;
+    return module;
+  } finally {
+    moduleLoader._load = originalLoad;
+  }
+}
+
 function buildSummaryContract(options: {
   total: number;
   mappedCount: number;
@@ -472,6 +508,154 @@ test('diagnostics counts toast explains total issues can exceed published diagno
   assert.equal(
     message,
     'Problems should match 204 published diagnostics in reference mode, not 451 total enriched issues.',
+  );
+});
+
+test('troubleshoot report includes extension mode and extension path', async () => {
+  const { buildTroubleshootReport } = await loadWatchModeModule();
+  const report = buildTroubleshootReport({
+    extensionMode: 2,
+    extensionPath: '/workspace/extensions/sphinx-doctor-vscode',
+    isWorkspaceTrusted: true,
+    config: {
+      projects: [configuredProject],
+      defaultSourceWorkspaceFolder: '02-keripy',
+      diagnosticsMode: 'layout',
+      pythonInterpreter: 'python3',
+      enrichmentEnabled: true,
+      enrichmentAutoRun: false,
+      discoveryEnabled: true,
+      discoveryIncludeLowConfidence: false,
+      discoveryInventoryWorkspaceFolderNames: ['01-keri-notes'],
+      discoveryExcludeWorkspaceFolders: [],
+      watchEnabled: true,
+      watchAutoLoadOnStartup: true,
+      refreshAutoRunOnStartup: false,
+      refreshAutoRunOnSave: false,
+      refreshDebounceMs: 1500,
+      watchDebounceMs: 750,
+      logLevel: 'info',
+    },
+    state: {
+      activated: true,
+      workspaceFolders: ['01-keri-notes', '02-keripy'],
+      configuredProjects: ['keripy'],
+      discoveredProjects: ['keripy'],
+      knownProjects: ['keripy'],
+      lastRefreshReason: 'activation',
+      lastLoadedDiagnosticsFiles: ['/workspace/notes/libs/keripy/.sphinx-diagnostics/latest.json'],
+      lastIssueCount: 398,
+      lastPublishableBeforeFilterCount: 256,
+      lastPublishedCount: 194,
+      lastFilteredByModeCount: 62,
+      lastSkippedCount: 142,
+      lastResolutionFailureCount: 3,
+      lastRawPendingCount: 1,
+      lastErrorCount: 0,
+      summary: {
+        state: 'watching',
+        projectCount: 1,
+        issueCount: 398,
+        publishableBeforeFilter: 256,
+        publishedDiagnostics: 194,
+        watcherCount: 4,
+        diagnosticMode: 'layout',
+        message: 'Watching 1 project.',
+      },
+      projectStatuses: [['keripy', 'loaded latest.json with 398 issues.']],
+    },
+  });
+
+  assert.match(report, /Extension mode: Development/);
+  assert.match(report, /Extension path: \/workspace\/extensions\/sphinx-doctor-vscode/);
+});
+
+test('troubleshoot report includes workspace trust, refresh-on-save, and diagnostics counts', async () => {
+  const { buildTroubleshootReport } = await loadWatchModeModule();
+  const report = buildTroubleshootReport({
+    extensionMode: 3,
+    extensionPath: '/workspace/extensions/sphinx-doctor-vscode',
+    isWorkspaceTrusted: false,
+    config: {
+      projects: [configuredProject, hioProject],
+      defaultSourceWorkspaceFolder: '02-keripy',
+      diagnosticsMode: 'reference',
+      pythonInterpreter: 'python3',
+      enrichmentEnabled: true,
+      enrichmentAutoRun: false,
+      discoveryEnabled: true,
+      discoveryIncludeLowConfidence: false,
+      discoveryInventoryWorkspaceFolderNames: ['01-keri-notes'],
+      discoveryExcludeWorkspaceFolders: ['20-billing-ops-tasks'],
+      watchEnabled: true,
+      watchAutoLoadOnStartup: true,
+      refreshAutoRunOnStartup: false,
+      refreshAutoRunOnSave: false,
+      refreshDebounceMs: 1500,
+      watchDebounceMs: 750,
+      logLevel: 'debug',
+    },
+    state: {
+      activated: true,
+      workspaceFolders: ['01-keri-notes', '02-keripy', '03-hio'],
+      configuredProjects: ['keripy'],
+      discoveredProjects: ['hio'],
+      knownProjects: ['keripy', 'hio'],
+      lastRefreshReason: 'saved conf.py',
+      lastLoadedDiagnosticsFiles: ['/workspace/notes/libs/keripy/.sphinx-diagnostics/latest.json'],
+      lastIssueCount: 451,
+      lastPublishableBeforeFilterCount: 204,
+      lastPublishedCount: 194,
+      lastFilteredByModeCount: 10,
+      lastSkippedCount: 257,
+      lastResolutionFailureCount: 2,
+      lastRawPendingCount: 1,
+      lastErrorCount: 1,
+      lastError: 'example failure',
+      summary: {
+        state: 'error',
+        projectCount: 2,
+        issueCount: 451,
+        publishableBeforeFilter: 204,
+        publishedDiagnostics: 194,
+        watcherCount: 6,
+        diagnosticMode: 'reference',
+        message: 'Sphinx Doctor watch mode hit an error. Check the output channel.',
+      },
+      projectStatuses: [['keripy', 'loaded latest.json with 451 issues.']],
+    },
+  });
+
+  assert.match(report, /Workspace trusted: false/);
+  assert.match(report, /Refresh on save: false/);
+  assert.match(report, /Total issues: 451/);
+  assert.match(report, /Publishable before filter: 204/);
+  assert.match(report, /Published diagnostics: 194/);
+  assert.match(report, /Filtered by mode: 10/);
+  assert.match(report, /Skipped issues: 257/);
+  assert.match(report, /URI resolution failures: 2/);
+  assert.match(report, /Raw pending projects: 1/);
+  assert.match(report, /Errors: 1/);
+});
+
+test('development and test status-bar badges appear in normal summary text', async () => {
+  const { applyExtensionModeBadge } = await loadWatchModeModule();
+
+  assert.equal(applyExtensionModeBadge('Sphinx Doctor: 398 issues', 2), 'Sphinx Doctor (Dev): 398 issues');
+  assert.equal(applyExtensionModeBadge('Sphinx Doctor: idle', 3), 'Sphinx Doctor (Test): idle');
+  assert.equal(applyExtensionModeBadge('Sphinx Doctor: no diagnostics', 1), 'Sphinx Doctor: no diagnostics');
+});
+
+test('development and test status-bar badges are preserved for self-test and manual-like statuses', async () => {
+  const { applyExtensionModeBadge } = await loadWatchModeModule();
+
+  assert.equal(
+    applyExtensionModeBadge(SELF_TEST_STATUS_TEXT, 2),
+    'Sphinx Doctor (Dev): self-test diagnostic published',
+  );
+  assert.equal(
+    applyExtensionModeBadge('Sphinx Doctor: diagnostics cleared.', 3),
+    'Sphinx Doctor (Test): diagnostics cleared.',
   );
 });
 
