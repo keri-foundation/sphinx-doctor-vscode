@@ -2,8 +2,14 @@
 .github/**
 .vscode/**
 .vscode-test/**
+.vscode-test.mjs
 node_modules/**
 tests/**
+src/**
+tsconfig.json
+out/test/**
+out/tests/**
+sphinx_doctor/__pycache__/**
 __pycache__/**
 *.pyc
 docs/**
