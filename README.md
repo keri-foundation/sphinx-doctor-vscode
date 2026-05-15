@@ -18,7 +18,7 @@ This repository started documentation-first and now includes a working extension
 - loads Sphinx Doctor diagnostics artifacts from fixture files, repo-local mirrors, or project-selected inventory files
 - publishes native VS Code Problems diagnostics mapped back to source files when the artifact has usable source locations
 - keeps a clear distinction between Development Host, installed VSIX, and automated extension-host testing through `Sphinx Doctor: Troubleshoot Environment`
-- supports generic Sphinx projects while using the KERI workspace as one important multi-root example
+- supports generic Sphinx projects and multi-root workspaces without assuming one fixed repo layout
 
 ## Quick Start
 
@@ -38,7 +38,7 @@ For a generic Sphinx repo, the simplest activation signal is a conventional `doc
 
 - diagnostics count explainability is present, but the broader count-trust story is still being hardened
 - refresh behavior and refresh-on-save clarity still need additional product hardening
-- non-KERI onboarding is improving, but the KERI workspace remains the best-covered multi-root example today
+- larger shared-workspace setups still have more operator guidance than the bundled standalone fixture
 - Marketplace release work is out of scope for the current incubation phase
 
 ## Initial Goals
@@ -71,7 +71,8 @@ Use `Sphinx Doctor: Show Status` for current extension status.
 - [CHANGELOG.md](CHANGELOG.md) tracks incubation-era repo changes
 - [docs/roadmap.md](docs/roadmap.md) outlines the current public incubation sequence and later roadmap
 - [docs/product-scope.md](docs/product-scope.md) defines the problem, users, scope, and non-goals
-- [docs/architecture.md](docs/architecture.md) captures the target extension shape
+- [docs/architecture.md](docs/architecture.md) captures the longer-term target shape
+- [docs/sphinx-diagnostics-extension-architecture.md](docs/sphinx-diagnostics-extension-architecture.md) describes the current implementation shape
 - [docs/research-inbox.md](docs/research-inbox.md) is the landing zone for incoming research notes
 - [docs/data-contract.md](docs/data-contract.md) defines the JSON-first diagnostics contract
 - [docs/mirror-layout.md](docs/mirror-layout.md) defines the stable `.sphinx-diagnostics/` layout
@@ -248,19 +249,19 @@ If a refresh finds a much broader diagnostics universe than the current baseline
 
 When the current diagnostics baseline is a focused single-category lane, refresh preserves that category by passing the same category filter back into the inventory runner before the parity guard compares the new run.
 
-## KERI Workspace Example
+## Shared Workspace Example
 
-The KERI ecosystem is still the most exercised multi-root example today. It demonstrates how Sphinx Doctor behaves in a larger shared workspace, but it is not the only supported shape.
+One common setup uses Sphinx Doctor in a multi-root workspace with a shared control folder and one or more analyzed repos.
 
-- `keripy` can be the active, refresh-capable repo when it has a verified Sphinx marker, a working docs Python at `.venv-docs/bin/python`, and a valid inventory-runner path in a shared workspace-control folder.
-- `hio`, `locksmith`, and `witness-hk` can be passive discovery candidates only. Sphinx Doctor may discover them from high-confidence `conf.py` markers, but refresh stays blocked until each repo has a verified docs Python environment.
-- `watcher-hk` and `fortweb` are not treated as Sphinx projects until real `conf.py` markers exist.
-- `example-workspace`, `sphinx-doctor-extension`, and `example-ops-workspace` stay intentionally excluded from source-project discovery.
+- `example-sphinx-project` can be the active, refresh-capable repo when it has a verified Sphinx marker, a working docs Python at `.venv-docs/bin/python`, and a valid inventory-runner path in the shared control folder.
+- additional repos can remain passive discovery candidates until their docs environments are verified.
+- non-Sphinx folders are ignored until they expose a real `conf.py` marker.
+- control or ops folders such as `example-workspace`, `sphinx-doctor-extension`, and `example-ops-workspace` stay intentionally excluded from source-project discovery.
 
 For a standard shared workspace layout, Sphinx Doctor can infer a refresh command without a committed `sphinxDoctor.projects` entry when all of the following are true:
 
-- `example-workspace` is open in the workspace as the shared inventory/control folder
-- the source repo is nested under `libs/` inside that shared workspace folder
+- `example-workspace` is open in the workspace as the shared inventory or control folder
+- the source repo lives inside that shared folder tree and is also open as its own workspace folder
 - `Devtools/sphinx/run_sphinx_inventory.sh` exists in the shared workspace folder
 - the source repo has `.venv-docs/bin/python`
 - the source repo has a Sphinx marker such as `docs/conf.py`
@@ -333,15 +334,15 @@ Example:
 {
 	"sphinxDoctor.projects": [
 		{
-			"id": "keripy",
-			"label": "keripy",
-			"sourceWorkspaceFolder": "keripy",
+			"id": "example-sphinx-project",
+			"label": "example-sphinx-project",
+			"sourceWorkspaceFolder": "example-sphinx-project",
 			"inventoryWorkspaceFolder": "example-workspace",
 			"repoRoot": ".",
 			"docsRoot": "docs",
 			"inventorySearchGlobs": [
-				"tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-*/report/issues.vscode.json",
-				"tmp/sphinx-inventory-keripy-sphinx-unexpected-indentation-batch-01-*/report/issues.json"
+				"tmp/sphinx-inventory-example-sphinx-project-*/report/issues.vscode.json",
+				"tmp/sphinx-inventory-example-sphinx-project-*/report/issues.json"
 			],
 			"preferredInventoryFiles": [
 				"issues.vscode.json",
@@ -355,17 +356,17 @@ Example:
 				"args": [
 					"Devtools/sphinx/run_sphinx_inventory.sh",
 					"--repo-root",
-					"libs/keripy",
+					"libs/example-sphinx-project",
 					"--python",
-					"libs/keripy/.venv-docs/bin/python",
+					"libs/example-sphinx-project/.venv-docs/bin/python",
 					"--category",
 					"unexpected-indentation",
 					"--context-lines",
 					"16"
 				],
 				"expectedOutputGlobs": [
-					"tmp/sphinx-inventory-keripy-*/report/issues.vscode.json",
-					"tmp/sphinx-inventory-keripy-*/report/issues.json"
+					"tmp/sphinx-inventory-example-sphinx-project-*/report/issues.vscode.json",
+					"tmp/sphinx-inventory-example-sphinx-project-*/report/issues.json"
 				]
 			}
 		}
@@ -375,7 +376,7 @@ Example:
 
 The extension uses Problems as the immediate navigation surface. A later slice can still write `.sphinx-diagnostics/latest-for-ai.md` as a stable Copilot summary artifact.
 
-Enrichment writes mirror artifacts into the analyzed repo, not the extension repo. For a project like `02-keripy`, the enriched archive lands under `02-keripy/.sphinx-diagnostics/runs/<run-id>/enriched.json`, and `02-keripy/.sphinx-diagnostics/latest.json` is updated alongside it.
+Enrichment writes mirror artifacts into the analyzed repo, not the extension repo. For a project like `example-sphinx-project`, the enriched archive lands under `example-sphinx-project/.sphinx-diagnostics/runs/<run-id>/enriched.json`, and `example-sphinx-project/.sphinx-diagnostics/latest.json` is updated alongside it.
 
 Python execution is blocked in untrusted workspaces. Read-only loading of already-enriched JSON remains available.
 
@@ -421,7 +422,7 @@ Workspace discovery is bounded to the folders currently open in VS Code. Sphinx 
 
 Folders without those markers are skipped instead of being guessed from looser hints such as `Makefile`, `requirements.txt`, or `pyproject.toml`. Discovery logs explain whether each workspace folder was included or skipped and why.
 
-Discovery exclusions can be configured through `sphinxDoctor.discovery.excludeWorkspaceFolders`. For the shared KERI workspace, a typical exclusion set is:
+Discovery exclusions can be configured through `sphinxDoctor.discovery.excludeWorkspaceFolders`. For a shared multi-root workspace, a typical exclusion set is:
 
 ```json
 {
@@ -443,21 +444,21 @@ When Sphinx Doctor finds inventory artifacts under a shared root such as `exampl
 
 Watch mode only publishes Problems automatically when it can load a compatible enriched artifact.
 
-For the stable KERI workspace, that means `02-keripy` needs an enriched mirror artifact at `libs/keripy/.sphinx-diagnostics/latest.json` whose source binding targets `02-keripy`.
+For a shared workspace example, that means `example-sphinx-project` needs an enriched mirror artifact at `libs/example-sphinx-project/.sphinx-diagnostics/latest.json` whose source binding targets `example-sphinx-project`.
 
-Old inventories created for `libs/keripy-sphinx-unexpected-indentation-batch-01` are intentionally rejected once `13-keripy-sphinx-batch-01` has been removed from the shared workspace. Do not fake-bind those old temp-worktree artifacts to `02-keripy`.
+Old inventories created for a different source repo are intentionally rejected once that repo is no longer open in the workspace. Do not fake-bind stale temp-worktree artifacts to the current analyzed project.
 
-If the self-test diagnostic appears but watch mode still shows no Problems for Keripy, the next thing to verify is either the presence and binding of `libs/keripy/.sphinx-diagnostics/latest.json` or the result of `Sphinx Doctor: Refresh Project Diagnostics`.
+If the self-test diagnostic appears but watch mode still shows no Problems for your target repo, the next thing to verify is either the presence and binding of that repo's `.sphinx-diagnostics/latest.json` mirror or the result of `Sphinx Doctor: Refresh Project Diagnostics`.
 
 ## Troubleshooting
 
 - If two extension-host debug sessions are running, use `Debug: Stop` or `Debug: Stop All` until both sessions are gone, then start only one `Run Sphinx Doctor Extension Host` session.
-- Do not use `Add Config (02-keripy)` when you want to run Sphinx Doctor.
-- Do not edit `02-keripy/.vscode/launch.json` to test this extension.
+- Do not use a target repo's own launch configuration when you want to run Sphinx Doctor.
+- Do not edit the analyzed repo's `.vscode/launch.json` to test this extension.
 - If `sphinxDoctor.*` settings are unknown in a window, the extension is not installed or not running in that window.
 - If the self-test appears but real Sphinx problems do not, the Problems publishing surface works and the remaining issue is the refresh or producer path.
 - If `refresh.autoRunOnSave` is enabled and saving files causes too much churn, turn it back off and use `Sphinx Doctor: Refresh Project Diagnostics` manually while keeping artifact watching enabled.
 
 ## Near-Term Next Step
 
-The next implementation slice should expand the same refresh and artifact workflow to additional repos such as `hio`, `locksmith`, `witness-hk`, and the rest of the shared workspace without weakening the current compatibility checks.
+The next implementation slice should expand the same refresh and artifact workflow to additional Sphinx repos without weakening the current compatibility checks.
