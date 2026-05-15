@@ -1952,7 +1952,7 @@ test('extension manifest exposes local package and install scripts', async () =>
     scripts?: Record<string, string>;
   };
 
-  assert.equal(manifest.publisher, 'jaelliot');
+  assert.equal(manifest.publisher, 'keri-foundation');
   assert.equal(manifest.scripts?.package, 'npm exec --yes --package @vscode/vsce -- vsce package');
   assert.equal(
     manifest.scripts?.['install:local'],

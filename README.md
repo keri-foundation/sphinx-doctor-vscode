@@ -193,7 +193,7 @@ Use this when command contributions or package changes look stale in a normal in
 
 If a normal reinstall still looks stale, use a conservative uninstall and reinstall path:
 
-1. Uninstall the extension from the VS Code Extensions UI, or run `code --uninstall-extension jaelliot.sphinx-doctor-vscode`.
+1. Uninstall the extension from the VS Code Extensions UI, or run `code --uninstall-extension keri-foundation.sphinx-doctor-vscode`.
 2. Run `npm run install:local`, or install the new `.vsix` from the Extensions UI.
 3. Reload the target VS Code window.
 4. Run `Sphinx Doctor: Troubleshoot Environment` again before doing any other smoke checks.

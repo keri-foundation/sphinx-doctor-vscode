@@ -1,13 +1,13 @@
 {
   "name": "sphinx-doctor-vscode",
-  "publisher": "jaelliot",
+  "publisher": "keri-foundation",
   "displayName": "Sphinx Doctor",
   "description": "Load Sphinx Doctor diagnostics JSON and publish native VS Code diagnostics.",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jaelliot/sphinx-doctor-vscode.git"
+    "url": "https://github.com/keri-foundation/sphinx-doctor-vscode.git"
   },
   "engines": {
     "vscode": "^1.100.0"
