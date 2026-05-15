@@ -113,10 +113,18 @@ suite('Sphinx Doctor extension host integration', function () {
     );
     assert.ok(editor, 'Expected the troubleshoot command to open an editor.');
 
+    const reportPath = editor.document.uri.fsPath;
+    const reportFileName = path.basename(reportPath);
+    const workspaceRoot = fixtureWorkspaceFolder().uri.fsPath;
+
     assert.equal(editor.document.languageId, 'markdown');
     assert.notEqual(editor.document.uri.scheme, 'untitled');
     assert.equal(editor.document.isDirty, false);
+    assert.equal(reportFileName.includes(' '), false);
+    assert.equal(reportFileName.startsWith('#'), false);
+    assert.equal(path.resolve(reportPath).startsWith(`${path.resolve(workspaceRoot)}${path.sep}`), false);
     assert.match(editor.document.uri.path, /\/troubleshoot-reports\/troubleshoot-environment-[^/]+\.md$/);
+    assert.match(reportFileName, /^troubleshoot-environment-\d{8}-\d{6}\.md$/);
     assert.match(editor.document.getText(), /# Sphinx Doctor Troubleshoot Environment/);
     assert.match(editor.document.getText(), /Extension mode: Test/);
     assert.match(editor.document.getText(), /Extension path:/);
