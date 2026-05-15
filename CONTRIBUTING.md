@@ -41,14 +41,14 @@ Use `Run Sphinx Doctor Extension Host (KERI Workspace Example)` only when you in
 
 ## Fixtures
 
-Use [test/fixtures/simple-sphinx/README.md](test/fixtures/simple-sphinx/README.md) for the smallest repeatable extension-host workspace. It contains a conventional `docs/conf.py`, a demo Python file, and a local `.sphinx-diagnostics/latest.json` mirror.
+Use [tests/fixtures/simple-sphinx/README.md](tests/fixtures/simple-sphinx/README.md) for the smallest repeatable extension-host workspace. It contains a conventional `docs/conf.py`, a demo Python file, and a local `.sphinx-diagnostics/latest.json` mirror.
 
 ## Contribution Guardrails
 
 - keep generic extension behavior free of hard-coded KERI-only assumptions
 - treat KERI as an example and stress-case workspace, not the default product identity
 - keep workflow and docs helpers thin wrappers over the existing npm scripts
-- if a slice is docs- or workflow-only, do not change runtime behavior in `src/` or test behavior in `test/` unless the change is explicitly required
+- if a slice is docs- or workflow-only, do not change runtime behavior in `src/` or test behavior in `tests/` unless the change is explicitly required
 
 ## Before Opening A PR
 

@@ -28,7 +28,7 @@
     "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",
     "test": "npm run test:unit",
-    "test:unit": "npm run compile && node --test out/test/extension.test.js",
+    "test:unit": "npm run compile && node --test out/tests/extension.test.js",
     "test:integration": "npm run compile && vscode-test --label integration",
     "test:all": "npm run test:unit && npm run test:integration",
     "package": "npm exec --yes --package @vscode/vsce -- vsce package",

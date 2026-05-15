@@ -169,7 +169,7 @@ Important notes:
 Use this lane for repeatable source-based extension-host checks in a real VS Code test window.
 
 1. Run `npm run test:integration`.
-2. This compiles the repo, launches VS Code in test mode, opens `test/fixtures/simple-sphinx`, and loads the extension from source.
+2. This compiles the repo, launches VS Code in test mode, opens `tests/fixtures/simple-sphinx`, and loads the extension from source.
 3. The current integration slice proves activation, expected command registration, startup loading of a static fixture `.sphinx-diagnostics/latest.json`, manual loading through `Sphinx Doctor: Load Project Diagnostics`, mapped diagnostics publication, retained-only issues staying unpublished, and clear behavior.
 4. Run `npm run test:all` when you want both the fast unit lane and the real host lane together.
 
@@ -206,7 +206,7 @@ The repo-local contributor workflow in [CONTRIBUTING.md](CONTRIBUTING.md) summar
 1. Run `npm run compile`.
 2. Run `npm test`.
 3. Run `npm run test:integration` or `npm run test:all` when you need the real extension-host lane.
-4. Use the bundled `test/fixtures/simple-sphinx` workspace or a generic Sphinx repo with `docs/conf.py` for smoke testing.
+4. Use the bundled `tests/fixtures/simple-sphinx` workspace or a generic Sphinx repo with `docs/conf.py` for smoke testing.
 5. Run `Sphinx Doctor: Troubleshoot Environment`.
 6. Confirm mode and extension path match the workflow you intended to test.
 7. Confirm the expected command exists in the Command Palette.

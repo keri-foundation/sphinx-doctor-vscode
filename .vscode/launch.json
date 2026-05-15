@@ -10,7 +10,7 @@
 				"--new-window",
 				"--disable-extensions",
 				"--extensionDevelopmentPath=${workspaceFolder}",
-				"${workspaceFolder}/test/fixtures/simple-sphinx"
+				"${workspaceFolder}/tests/fixtures/simple-sphinx"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
@@ -25,7 +25,7 @@
 			"args": [
 				"--new-window",
 				"--extensionDevelopmentPath=${workspaceFolder}",
-				"${workspaceFolder}/test/fixtures/simple-sphinx"
+				"${workspaceFolder}/tests/fixtures/simple-sphinx"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"

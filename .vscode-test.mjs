@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const integrationWorkspaceFolder = path.resolve(
   __dirname,
-  'test',
+  'tests',
   'fixtures',
   'simple-sphinx',
 );
@@ -15,7 +15,7 @@ const integrationWorkspaceFolder = path.resolve(
 export default defineConfig([
   {
     label: 'integration',
-    files: 'out/test/integration/**/*.test.js',
+    files: 'out/tests/integration/**/*.test.js',
     version: 'stable',
     extensionDevelopmentPath: __dirname,
     workspaceFolder: integrationWorkspaceFolder,
