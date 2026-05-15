@@ -1,0 +1,82 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Sphinx Doctor: Compile",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "compile"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": ["$tsc"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "Sphinx Doctor: Test",
+      "type": "shell",
+      "command": "npm",
+      "args": ["test"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "Sphinx Doctor: Test Integration",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "test:integration"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Sphinx Doctor: Test All",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "test:all"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Sphinx Doctor: Package VSIX",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "package"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Sphinx Doctor: Install Local VSIX",
+      "type": "shell",
+      "command": "npm",
+      "args": ["run", "install:local"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Sphinx Doctor: Test Package Install Local VSIX",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "${workspaceFolder}/../../Devtools/sphinx-doctor/install-local-vsix.sh"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

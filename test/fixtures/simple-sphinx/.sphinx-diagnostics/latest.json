@@ -1,0 +1,118 @@
+{
+  "schema": "sphinx-diagnostics-v1",
+  "schemaVersion": 1,
+  "generatedAt": "2026-05-13T23:15:00Z",
+  "tool": {
+    "name": "sphinx-doctor-enricher",
+    "version": "0.1.0"
+  },
+  "workspace": {
+    "sourceWorkspaceFolder": "simple-sphinx",
+    "inventoryWorkspaceFolder": "simple-sphinx",
+    "repoRoot": ".",
+    "docsRoot": "docs",
+    "mirrorRoot": ".sphinx-diagnostics"
+  },
+  "run": {
+    "id": "simple-sphinx-fixture-run-001",
+    "source": "fixture-static-contract",
+    "inventoryFile": ".sphinx-diagnostics/latest.json",
+    "inventoryDir": ".sphinx-diagnostics"
+  },
+  "summary": {
+    "total": 2,
+    "bySeverity": {
+      "error": 1,
+      "warning": 1
+    },
+    "byCategory": {
+      "unexpected-indentation": 2
+    },
+    "mappedCount": 1,
+    "unmappedCount": 1,
+    "publishedDiagnostics": 1,
+    "retainedOnly": 1
+  },
+  "issues": [
+    {
+      "id": "simple-sphinx-demo-unexpected-indentation-1",
+      "severity": "error",
+      "category": "unexpected-indentation",
+      "code": "docutils.unexpected-indentation",
+      "message": "Fixture docstring indentation issue.",
+      "raw": {
+        "source_file": "src/demo.py",
+        "object_name": "greet",
+        "object_kind": "function",
+        "docstring_line": 1,
+        "raw_location": "src/demo.py:greet:docstring:1"
+      },
+      "objectName": "greet",
+      "objectKind": "function",
+      "docstringLine": 1,
+      "sourceWorkspaceFolder": "simple-sphinx",
+      "inventoryWorkspaceFolder": "simple-sphinx",
+      "repoRelativePath": "src/demo.py",
+      "inventoryRelativePath": ".sphinx-diagnostics/latest.json",
+      "rawLocation": "src/demo.py:greet:docstring:1",
+      "sourceRange": {
+        "startLine": 2,
+        "startColumn": 5,
+        "endLine": 2,
+        "endColumn": 37,
+        "anchorKind": "docstring-line"
+      },
+      "mapping": {
+        "confidence": "high",
+        "strategy": "fixture-docstring-line",
+        "reason": "Static fixture maps directly to the demo docstring line inside the workspace source tree.",
+        "objectResolved": true,
+        "lineResolved": true
+      },
+      "publishDiagnostic": true,
+      "related": [
+        {
+          "label": "mirror target",
+          "path": ".sphinx-diagnostics/latest.json"
+        }
+      ]
+    },
+    {
+      "id": "simple-sphinx-demo-unexpected-indentation-retained-1",
+      "severity": "warning",
+      "category": "unexpected-indentation",
+      "code": "docutils.unexpected-indentation",
+      "message": "Retained-only fixture issue without a mapped source anchor.",
+      "raw": {
+        "source_file": "src/demo.py",
+        "object_name": "missing_greet",
+        "object_kind": "function",
+        "docstring_line": 3,
+        "raw_location": "src/demo.py:missing_greet:docstring:3"
+      },
+      "objectName": "missing_greet",
+      "objectKind": "function",
+      "docstringLine": 3,
+      "sourceWorkspaceFolder": "simple-sphinx",
+      "inventoryWorkspaceFolder": "simple-sphinx",
+      "repoRelativePath": "src/demo.py",
+      "inventoryRelativePath": ".sphinx-diagnostics/latest.json",
+      "rawLocation": "src/demo.py:missing_greet:docstring:3",
+      "sourceRange": null,
+      "mapping": {
+        "confidence": "none",
+        "strategy": "fixture-retained-only",
+        "reason": "The fixture keeps one retained-only issue so the host lane can prove unmapped issues do not create fake Problems anchors.",
+        "objectResolved": false,
+        "lineResolved": false
+      },
+      "publishDiagnostic": false,
+      "related": [
+        {
+          "label": "mirror target",
+          "path": ".sphinx-diagnostics/latest.json"
+        }
+      ]
+    }
+  ]
+}

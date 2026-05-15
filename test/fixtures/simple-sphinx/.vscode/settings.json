@@ -1,0 +1,21 @@
+{
+  "sphinxDoctor.watch.enabled": true,
+  "sphinxDoctor.watch.autoLoadOnStartup": true,
+  "sphinxDoctor.projects": [
+    {
+      "id": "simple-sphinx",
+      "label": "simple-sphinx fixture",
+      "sourceWorkspaceFolder": "simple-sphinx",
+      "inventoryWorkspaceFolder": "simple-sphinx",
+      "repoRoot": ".",
+      "docsRoot": "docs",
+      "inventorySearchGlobs": [
+        ".sphinx-diagnostics/latest.json"
+      ],
+      "preferredInventoryFiles": [
+        "latest.json"
+      ],
+      "mirrorRoot": ".sphinx-diagnostics"
+    }
+  ]
+}
