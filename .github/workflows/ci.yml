@@ -28,8 +28,5 @@ jobs:
       - name: Compile extension
         run: npm run compile
 
-      # The real extension-host lane exists locally as `npm run test:integration`.
-      # Keep CI on the fast unit lane until the hosted environment is explicitly
-      # validated for this repo without broadening this public-hygiene slice.
-      - name: Run fast unit lane
-        run: npm test
+      - name: Run unit and extension-host test lanes
+        run: npm run test:all

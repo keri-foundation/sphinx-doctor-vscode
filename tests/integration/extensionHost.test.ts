@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import * as vscode from 'vscode';
 
-const EXTENSION_ID = 'jaelliot.sphinx-doctor-vscode';
+const EXTENSION_ID = 'keri-foundation.sphinx-doctor-vscode';
 const COMMAND_IDS = [
   'sphinxDoctor.publishSelfTestDiagnostic',
   'sphinxDoctor.loadFixtureDiagnostics',
