@@ -30,7 +30,7 @@ Sphinx Doctor is in public incubation. Keep contributions small, testable, and e
 3. In the Extension Development Host window, run `Sphinx Doctor: Troubleshoot Environment`.
 4. Confirm the report shows `Development` mode.
 
-Use `Run Sphinx Doctor Extension Host (KERI Workspace Example)` only when you intentionally want to exercise the larger KERI multi-root workspace.
+Use `Run Sphinx Doctor Extension Host (Multi-Root Fixture Example)` only when you intentionally want to exercise a larger multi-root workspace shape than the default single-fixture lane.
 
 ## Installed VSIX
 

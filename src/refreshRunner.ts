@@ -208,10 +208,13 @@ export async function inferProjectRefreshConfig(
   }
 
   const pathExists = options.pathExists ?? defaultPathExists;
-  const orchestratorFolder = findWorkspaceFolderByName(options.workspaceFolders, '01-keri-notes');
-  if (!orchestratorFolder) {
+  const inventoryWorkspaceFolder = findWorkspaceFolderByName(
+    options.workspaceFolders,
+    options.project.inventoryWorkspaceFolder,
+  );
+  if (!inventoryWorkspaceFolder) {
     return {
-      reason: 'Workspace folder 01-keri-notes is not open, so no default refresh command can be inferred.',
+      reason: `Inventory workspace folder ${options.project.inventoryWorkspaceFolder} is not open, so no default refresh command can be inferred.`,
     };
   }
 
@@ -226,18 +229,19 @@ export async function inferProjectRefreshConfig(
   }
 
   const repoRoot = path.resolve(sourceWorkspaceFolder.fsPath, options.project.repoRoot ?? '.');
-  const relativeRepoRoot = path.relative(orchestratorFolder.fsPath, repoRoot);
-  if (
-    relativeRepoRoot.length === 0 ||
-    relativeRepoRoot.startsWith('..') ||
-    path.isAbsolute(relativeRepoRoot)
-  ) {
+  const relativeRepoRoot = path.relative(inventoryWorkspaceFolder.fsPath, repoRoot);
+  if (relativeRepoRoot.startsWith('..') || path.isAbsolute(relativeRepoRoot)) {
     return {
-      reason: `Source root ${repoRoot} is not inside 01-keri-notes, so no default refresh command can be inferred.`,
+      reason: `Source root ${repoRoot} is not inside inventory workspace folder ${options.project.inventoryWorkspaceFolder}, so no default refresh command can be inferred.`,
     };
   }
 
-  const runnerPath = path.resolve(orchestratorFolder.fsPath, 'Devtools', 'sphinx', 'run_sphinx_inventory.sh');
+  const runnerPath = path.resolve(
+    inventoryWorkspaceFolder.fsPath,
+    'Devtools',
+    'sphinx',
+    'run_sphinx_inventory.sh',
+  );
   if (!(await pathExists(runnerPath))) {
     return {
       reason: `Sphinx inventory runner is missing: ${runnerPath}.`,
@@ -261,18 +265,19 @@ export async function inferProjectRefreshConfig(
   }
 
   const repoName = path.basename(repoRoot);
-  const relativePythonPath = toPosixPath(path.relative(orchestratorFolder.fsPath, pythonPath));
+  const normalizedRelativeRepoRoot = relativeRepoRoot.length === 0 ? '.' : toPosixPath(relativeRepoRoot);
+  const relativePythonPath = toPosixPath(path.relative(inventoryWorkspaceFolder.fsPath, pythonPath));
 
   return {
     source: 'inferred',
     config: {
       enabled: true,
-      cwdWorkspaceFolder: '01-keri-notes',
+      cwdWorkspaceFolder: options.project.inventoryWorkspaceFolder,
       command: 'bash',
       args: [
         'Devtools/sphinx/run_sphinx_inventory.sh',
         '--repo-root',
-        toPosixPath(relativeRepoRoot),
+        normalizedRelativeRepoRoot,
         '--python',
         relativePythonPath,
         '--context-lines',

@@ -123,11 +123,11 @@
               },
               "sourceWorkspaceFolder": {
                 "type": "string",
-                "description": "Workspace folder name that owns repo-relative source paths such as 02-keripy."
+                "description": "Workspace folder name that owns repo-relative source paths such as keripy."
               },
               "inventoryWorkspaceFolder": {
                 "type": "string",
-                "description": "Workspace folder name searched for diagnostics inventory files such as 01-keri-notes."
+                "description": "Workspace folder name searched for diagnostics inventory files, for example a shared workspace that stores refresh artifacts outside the source repo."
               },
               "repoRoot": {
                 "type": "string",
@@ -245,10 +245,8 @@
         },
         "sphinxDoctor.discovery.inventoryWorkspaceFolderNames": {
           "type": "array",
-          "default": [
-            "01-keri-notes"
-          ],
-          "description": "Workspace folder names allowed as shared inventory artifact roots.",
+          "default": [],
+          "description": "Optional workspace folder names allowed as shared inventory artifact roots when diagnostics are produced outside the source repo.",
           "items": {
             "type": "string"
           }

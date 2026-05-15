@@ -33,7 +33,7 @@
 			"preLaunchTask": "npm: compile"
 		},
 		{
-			"name": "Run Sphinx Doctor Extension Host (KERI Workspace Example)",
+			"name": "Run Sphinx Doctor Extension Host (Multi-Root Fixture Example)",
 			"type": "extensionHost",
 			"request": "launch",
 			"runtimeExecutable": "${execPath}",
@@ -41,7 +41,8 @@
 				"--new-window",
 				"--disable-extensions",
 				"--extensionDevelopmentPath=${workspaceFolder}",
-				"${workspaceFolder}/../../keri-notes.code-workspace"
+				"${workspaceFolder}/tests/fixtures/simple-sphinx",
+				"${workspaceFolder}"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"

@@ -35,7 +35,7 @@ class EnrichFixtureTests(unittest.TestCase):
                     "--source-workspace-folder",
                     "02-keripy",
                     "--inventory-workspace-folder",
-                    "01-keri-notes",
+                    "example-workspace",
                     "--repo-root",
                     ".",
                     "--docs-root",
@@ -72,7 +72,7 @@ class EnrichFixtureTests(unittest.TestCase):
                     "--source-workspace-folder",
                     "02-keripy",
                     "--inventory-workspace-folder",
-                    "01-keri-notes",
+                    "example-workspace",
                     "--repo-root",
                     ".",
                     "--docs-root",
@@ -106,7 +106,7 @@ class EnrichFixtureTests(unittest.TestCase):
         payload = self._run_cli()
 
         self.assertEqual(payload["workspace"]["sourceWorkspaceFolder"], "02-keripy")
-        self.assertEqual(payload["workspace"]["inventoryWorkspaceFolder"], "01-keri-notes")
+        self.assertEqual(payload["workspace"]["inventoryWorkspaceFolder"], "example-workspace")
         self.assertEqual(payload["workspace"]["mirrorRoot"], ".sphinx-diagnostics")
 
     def test_output_is_deterministic(self) -> None:

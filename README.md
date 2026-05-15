@@ -250,18 +250,18 @@ When the current diagnostics baseline is a focused single-category lane, refresh
 
 ## KERI Workspace Example
 
-The KERI workspace is the most exercised multi-root example today. It demonstrates how Sphinx Doctor behaves in a larger shared workspace, but it is not the only supported shape.
+The KERI ecosystem is still the most exercised multi-root example today. It demonstrates how Sphinx Doctor behaves in a larger shared workspace, but it is not the only supported shape.
 
-- `02-keripy` is the current active, refresh-capable repo because it has a verified Sphinx marker, a working docs Python at `.venv-docs/bin/python`, and a valid inventory-runner path through `01-keri-notes/Devtools/sphinx/run_sphinx_inventory.sh`.
-- `03-hio`, `06-locksmith`, and `07-witness-hk` are passive discovery candidates only. Sphinx Doctor may discover them from high-confidence `conf.py` markers, but refresh stays blocked until each repo has a verified docs Python environment.
-- `08-watcher-hk` and `09-fortweb` are not treated as Sphinx projects until real `conf.py` markers exist.
-- `01-keri-notes`, `11-sphinx-doctor`, and `20-billing-ops-tasks` stay intentionally excluded from source-project discovery.
+- `keripy` can be the active, refresh-capable repo when it has a verified Sphinx marker, a working docs Python at `.venv-docs/bin/python`, and a valid inventory-runner path in a shared workspace-control folder.
+- `hio`, `locksmith`, and `witness-hk` can be passive discovery candidates only. Sphinx Doctor may discover them from high-confidence `conf.py` markers, but refresh stays blocked until each repo has a verified docs Python environment.
+- `watcher-hk` and `fortweb` are not treated as Sphinx projects until real `conf.py` markers exist.
+- `example-workspace`, `sphinx-doctor-extension`, and `example-ops-workspace` stay intentionally excluded from source-project discovery.
 
-For the standard KERI workspace layout, Sphinx Doctor can infer a refresh command without a committed `sphinxDoctor.projects` entry when all of the following are true:
+For a standard shared workspace layout, Sphinx Doctor can infer a refresh command without a committed `sphinxDoctor.projects` entry when all of the following are true:
 
-- `01-keri-notes` is open in the workspace
-- the source repo is nested under `01-keri-notes/libs/`
-- `Devtools/sphinx/run_sphinx_inventory.sh` exists in `01-keri-notes`
+- `example-workspace` is open in the workspace as the shared inventory/control folder
+- the source repo is nested under `libs/` inside that shared workspace folder
+- `Devtools/sphinx/run_sphinx_inventory.sh` exists in the shared workspace folder
 - the source repo has `.venv-docs/bin/python`
 - the source repo has a Sphinx marker such as `docs/conf.py`
 
@@ -335,8 +335,8 @@ Example:
 		{
 			"id": "keripy",
 			"label": "keripy",
-			"sourceWorkspaceFolder": "02-keripy",
-			"inventoryWorkspaceFolder": "01-keri-notes",
+			"sourceWorkspaceFolder": "keripy",
+			"inventoryWorkspaceFolder": "example-workspace",
 			"repoRoot": ".",
 			"docsRoot": "docs",
 			"inventorySearchGlobs": [
@@ -350,7 +350,7 @@ Example:
 			"mirrorRoot": ".sphinx-diagnostics",
 			"refresh": {
 				"enabled": true,
-				"cwdWorkspaceFolder": "01-keri-notes",
+				"cwdWorkspaceFolder": "example-workspace",
 				"command": "bash",
 				"args": [
 					"Devtools/sphinx/run_sphinx_inventory.sh",
@@ -384,9 +384,9 @@ Watch mode settings:
 ```json
 {
 	"sphinxDoctor.discovery.excludeWorkspaceFolders": [
-		"01-keri-notes",
-		"11-sphinx-doctor",
-		"20-billing-ops-tasks"
+		"example-workspace",
+		"sphinx-doctor-extension",
+		"example-ops-workspace"
 	],
 	"sphinxDoctor.watch.enabled": true,
 	"sphinxDoctor.watch.autoLoadOnStartup": true,
@@ -426,18 +426,18 @@ Discovery exclusions can be configured through `sphinxDoctor.discovery.excludeWo
 ```json
 {
 	"sphinxDoctor.discovery.excludeWorkspaceFolders": [
-		"01-keri-notes",
-		"11-sphinx-doctor",
-		"20-billing-ops-tasks"
+		"example-workspace",
+		"sphinx-doctor-extension",
+		"example-ops-workspace"
 	]
 }
 ```
 
 These exclusions prevent workspace-control, extension-dev, and private-ops folders from being treated as source repos even if they contain Sphinx-looking files.
 
-Discovered projects can search both their own `.sphinx-diagnostics/` mirror and selected shared inventory roots such as `01-keri-notes/tmp/`, but the extension never scans outside the current workspace folders.
+Discovered projects can search both their own `.sphinx-diagnostics/` mirror and selected shared inventory roots such as `example-workspace/tmp/`, but the extension never scans outside the current workspace folders.
 
-When Sphinx Doctor finds inventory artifacts under a shared root such as `01-keri-notes/tmp/`, it does not blindly assume they belong to the first matching repo. Raw inventory files are checked against their recorded `repo_root`, and enriched contracts are checked against their recorded `sourceWorkspaceFolder`. If those bindings do not match the open source workspace folder, the artifact is rejected and reported instead of being silently published into the wrong repo.
+When Sphinx Doctor finds inventory artifacts under a shared root such as `example-workspace/tmp/`, it does not blindly assume they belong to the first matching repo. Raw inventory files are checked against their recorded `repo_root`, and enriched contracts are checked against their recorded `sourceWorkspaceFolder`. If those bindings do not match the open source workspace folder, the artifact is rejected and reported instead of being silently published into the wrong repo.
 
 ## Stable Artifact Smoke
 

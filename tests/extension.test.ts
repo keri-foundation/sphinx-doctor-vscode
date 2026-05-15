@@ -105,7 +105,7 @@ const contract: DiagnosticsContract = {
   tool: { name: 'sphinx-doctor-enricher', version: '0.1.0' },
   workspace: {
     sourceWorkspaceFolder: '02-keripy',
-    inventoryWorkspaceFolder: '01-keri-notes',
+    inventoryWorkspaceFolder: 'example-workspace',
     repoRoot: '.',
     docsRoot: 'docs',
     mirrorRoot: '.sphinx-diagnostics',
@@ -139,7 +139,7 @@ const mappedIssue: DiagnosticsIssue = {
   objectKind: 'class',
   docstringLine: 6,
   sourceWorkspaceFolder: '02-keripy',
-  inventoryWorkspaceFolder: '01-keri-notes',
+  inventoryWorkspaceFolder: 'example-workspace',
   repoRelativePath: 'src/keri/core/coring.py',
   inventoryRelativePath: 'tmp/run/issues.json',
   rawLocation: 'src/keri/core/coring.py:keri.core.coring.Number:docstring:6',
@@ -165,7 +165,7 @@ const configuredProject: ConfiguredProject = {
   id: 'keripy',
   label: 'keripy',
   sourceWorkspaceFolder: '02-keripy',
-  inventoryWorkspaceFolder: '01-keri-notes',
+  inventoryWorkspaceFolder: 'example-workspace',
   repoRoot: '.',
   docsRoot: 'docs',
   inventorySearchGlobs: [
@@ -180,7 +180,7 @@ const hioProject: ConfiguredProject = {
   id: 'hio',
   label: 'hio',
   sourceWorkspaceFolder: '03-hio',
-  inventoryWorkspaceFolder: '01-keri-notes',
+  inventoryWorkspaceFolder: 'example-workspace',
   repoRoot: '.',
   docsRoot: 'docs',
   inventorySearchGlobs: [
@@ -195,7 +195,7 @@ const locksmithProject: ConfiguredProject = {
   id: 'locksmith',
   label: 'locksmith',
   sourceWorkspaceFolder: '06-locksmith',
-  inventoryWorkspaceFolder: '01-keri-notes',
+  inventoryWorkspaceFolder: 'example-workspace',
   repoRoot: '.',
   docsRoot: 'docs',
   inventorySearchGlobs: [
@@ -210,7 +210,7 @@ const witnessProject: ConfiguredProject = {
   id: 'witness-hk',
   label: 'witness-hk',
   sourceWorkspaceFolder: '07-witness-hk',
-  inventoryWorkspaceFolder: '01-keri-notes',
+  inventoryWorkspaceFolder: 'example-workspace',
   repoRoot: '.',
   docsRoot: 'docs',
   inventorySearchGlobs: [
@@ -223,7 +223,7 @@ const witnessProject: ConfiguredProject = {
 
 const configuredRefresh = {
   enabled: true,
-  cwdWorkspaceFolder: '01-keri-notes',
+  cwdWorkspaceFolder: 'example-workspace',
   command: 'bash',
   args: [
     'Devtools/sphinx/run_sphinx_inventory.sh',
@@ -526,7 +526,7 @@ test('troubleshoot report includes extension mode and extension path', async () 
       enrichmentAutoRun: false,
       discoveryEnabled: true,
       discoveryIncludeLowConfidence: false,
-      discoveryInventoryWorkspaceFolderNames: ['01-keri-notes'],
+      discoveryInventoryWorkspaceFolderNames: ['example-workspace'],
       discoveryExcludeWorkspaceFolders: [],
       watchEnabled: true,
       watchAutoLoadOnStartup: true,
@@ -538,7 +538,7 @@ test('troubleshoot report includes extension mode and extension path', async () 
     },
     state: {
       activated: true,
-      workspaceFolders: ['01-keri-notes', '02-keripy'],
+      workspaceFolders: ['example-workspace', '02-keripy'],
       configuredProjects: ['keripy'],
       discoveredProjects: ['keripy'],
       knownProjects: ['keripy'],
@@ -585,8 +585,8 @@ test('troubleshoot report includes workspace trust, refresh-on-save, and diagnos
       enrichmentAutoRun: false,
       discoveryEnabled: true,
       discoveryIncludeLowConfidence: false,
-      discoveryInventoryWorkspaceFolderNames: ['01-keri-notes'],
-      discoveryExcludeWorkspaceFolders: ['20-billing-ops-tasks'],
+      discoveryInventoryWorkspaceFolderNames: ['example-workspace'],
+      discoveryExcludeWorkspaceFolders: ['example-ops-workspace'],
       watchEnabled: true,
       watchAutoLoadOnStartup: true,
       refreshAutoRunOnStartup: false,
@@ -597,7 +597,7 @@ test('troubleshoot report includes workspace trust, refresh-on-save, and diagnos
     },
     state: {
       activated: true,
-      workspaceFolders: ['01-keri-notes', '02-keripy', '03-hio'],
+      workspaceFolders: ['example-workspace', '02-keripy', '03-hio'],
       configuredProjects: ['keripy'],
       discoveredProjects: ['hio'],
       knownProjects: ['keripy', 'hio'],
@@ -821,7 +821,7 @@ test('buildProjectQuickPickItems exposes label, id, and workspace details', () =
   const [item] = buildProjectQuickPickItems([configuredProject]);
   assert.equal(item.label, 'keripy');
   assert.equal(item.description, 'keripy');
-  assert.equal(item.detail, '02-keripy <- 01-keri-notes');
+  assert.equal(item.detail, '02-keripy <- example-workspace');
 });
 
 test('orderInventoryCandidates prefers the newest run directory and preferred filenames inside it', () => {
@@ -1261,8 +1261,8 @@ test('buildEnrichmentRunPlan keeps source, inventory, and mirror roots separated
     pythonInterpreter: 'python3',
     project: configuredProject,
     workspaceFolders: [
-      { name: '11-sphinx-doctor', fsPath: '/workspace/sphinx-doctor' },
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'sphinx-doctor-extension', fsPath: '/workspace/sphinx-doctor' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/keripy' },
     ],
     rawIssuesPath: '/workspace/notes/tmp/run-002/report/issues.json',
@@ -1290,7 +1290,7 @@ test('buildEnrichmentRunPlan uses explicit roots and never collapses source into
     pythonInterpreter: 'python3',
     project: configuredProject,
     workspaceFolders: [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/keripy' },
     ],
     rawIssuesPath: '/workspace/notes/tmp/run-003/report/issues.json',
@@ -1524,7 +1524,7 @@ test('buildRefreshRunPlan keeps cwd, source, inventory, and mirror roots separat
     project: configuredProject,
     refresh: configuredRefresh,
     workspaceFolders: [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
     ],
     now: new Date(2026, 4, 9, 12, 34, 56),
@@ -1544,7 +1544,7 @@ test('buildRefreshRunPlan appends category args when a refresh scope exists', ()
     project: configuredProject,
     refresh: configuredRefresh,
     workspaceFolders: [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
     ],
     refreshCategory: 'unexpected-indentation',
@@ -1558,7 +1558,7 @@ test('buildRefreshRunPlan keeps existing behavior unchanged without inferred sco
     project: configuredProject,
     refresh: configuredRefresh,
     workspaceFolders: [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
     ],
   });
@@ -1566,7 +1566,7 @@ test('buildRefreshRunPlan keeps existing behavior unchanged without inferred sco
   assert.deepEqual(plan.args, configuredRefresh.args);
 });
 
-test('inferProjectRefreshConfig derives the Devtools runner for the standard notes workspace layout', async () => {
+test('inferProjectRefreshConfig derives the Devtools runner for a shared inventory workspace', async () => {
   const existingPaths = new Set([
     '/workspace/notes/Devtools/sphinx/run_sphinx_inventory.sh',
     '/workspace/notes/libs/keripy/.venv-docs/bin/python',
@@ -1576,7 +1576,7 @@ test('inferProjectRefreshConfig derives the Devtools runner for the standard not
   const resolution = await inferProjectRefreshConfig({
     project: configuredProject,
     workspaceFolders: [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
     ],
     pathExists: async (filePath) => existingPaths.has(filePath),
@@ -1584,6 +1584,45 @@ test('inferProjectRefreshConfig derives the Devtools runner for the standard not
 
   assert.equal(resolution.source, 'inferred');
   assert.deepEqual(resolution.config, configuredRefresh);
+});
+
+test('inferProjectRefreshConfig supports a single ordinary workspace when the runner lives there', async () => {
+  const project: ConfiguredProject = {
+    ...configuredProject,
+    sourceWorkspaceFolder: 'docs-workspace',
+    inventoryWorkspaceFolder: 'docs-workspace',
+  };
+
+  const resolution = await inferProjectRefreshConfig({
+    project,
+    workspaceFolders: [{ name: 'docs-workspace', fsPath: '/workspace/docs-workspace' }],
+    pathExists: async (filePath) =>
+      new Set([
+        '/workspace/docs-workspace/Devtools/sphinx/run_sphinx_inventory.sh',
+        '/workspace/docs-workspace/.venv-docs/bin/python',
+        '/workspace/docs-workspace/docs/conf.py',
+      ]).has(filePath),
+  });
+
+  assert.equal(resolution.source, 'inferred');
+  assert.deepEqual(resolution.config, {
+    enabled: true,
+    cwdWorkspaceFolder: 'docs-workspace',
+    command: 'bash',
+    args: [
+      'Devtools/sphinx/run_sphinx_inventory.sh',
+      '--repo-root',
+      '.',
+      '--python',
+      '.venv-docs/bin/python',
+      '--context-lines',
+      '16',
+    ],
+    expectedOutputGlobs: [
+      'tmp/sphinx-inventory-docs-workspace-*/report/issues.vscode.json',
+      'tmp/sphinx-inventory-docs-workspace-*/report/issues.json',
+    ],
+  });
 });
 
 test('filterRecentInventoryCandidates rejects outputs that predate the current refresh run', () => {
@@ -1618,16 +1657,16 @@ test('detectProjectFromSnapshot finds a high-confidence Sphinx project from docs
     },
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
       excludeWorkspaceFolderNames: [],
-      availableWorkspaceFolderNames: ['01-keri-notes', '02-keripy'],
+      availableWorkspaceFolderNames: ['example-workspace', '02-keripy'],
     },
   );
 
   assert.equal(project?.discoveryConfidence, 'high');
   assert.equal(project?.docsRoot, 'docs');
   assert.equal(project?.sourceWorkspaceFolder, '02-keripy');
-  assert.equal(project?.inventoryWorkspaceFolder, '01-keri-notes');
+  assert.equal(project?.inventoryWorkspaceFolder, 'example-workspace');
 });
 
 test('detectProjectFromSnapshot finds a high-confidence Sphinx project from docs/source/conf.py', () => {
@@ -1639,9 +1678,9 @@ test('detectProjectFromSnapshot finds a high-confidence Sphinx project from docs
     },
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
       excludeWorkspaceFolderNames: [],
-      availableWorkspaceFolderNames: ['01-keri-notes', '03-hio'],
+      availableWorkspaceFolderNames: ['example-workspace', '03-hio'],
     },
   );
 
@@ -1650,7 +1689,7 @@ test('detectProjectFromSnapshot finds a high-confidence Sphinx project from docs
   assert.equal(project?.sourceWorkspaceFolder, '03-hio');
 });
 
-test('detectProjectFromSnapshot treats 01-keri-notes as a shared inventory root, not the source repo', () => {
+test('detectProjectFromSnapshot treats example-workspace as a shared inventory root, not the source repo', () => {
   const project = detectProjectFromSnapshot(
     { name: '02-keripy', fsPath: '/workspace/keripy' },
     {
@@ -1659,16 +1698,16 @@ test('detectProjectFromSnapshot treats 01-keri-notes as a shared inventory root,
     },
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
       excludeWorkspaceFolderNames: [],
-      availableWorkspaceFolderNames: ['01-keri-notes', '02-keripy'],
+      availableWorkspaceFolderNames: ['example-workspace', '02-keripy'],
     },
   );
 
   assert.equal(project?.sourceWorkspaceFolder, '02-keripy');
-  assert.equal(project?.inventoryWorkspaceFolder, '01-keri-notes');
+  assert.equal(project?.inventoryWorkspaceFolder, 'example-workspace');
   assert.equal(
-    project?.inventorySearchTargets?.some((target) => target.workspaceFolderName === '01-keri-notes'),
+    project?.inventorySearchTargets?.some((target) => target.workspaceFolderName === 'example-workspace'),
     true,
   );
 });
@@ -1683,9 +1722,9 @@ test('detectProjectFromSnapshot ignores docs-only and Makefile-only folders with
       },
       {
         includeLowConfidence: true,
-        inventoryWorkspaceFolderNames: ['01-keri-notes'],
+        inventoryWorkspaceFolderNames: ['example-workspace'],
         excludeWorkspaceFolderNames: [],
-        availableWorkspaceFolderNames: ['01-keri-notes', '09-fortweb'],
+        availableWorkspaceFolderNames: ['example-workspace', '09-fortweb'],
       },
     );
 
@@ -1695,16 +1734,16 @@ test('detectProjectFromSnapshot ignores docs-only and Makefile-only folders with
 
 test('detectProjectFromSnapshot ignores irrelevant workspace folders', () => {
   const project = detectProjectFromSnapshot(
-    { name: '20-billing-ops-tasks', fsPath: '/workspace/billing' },
+    { name: 'example-ops-workspace', fsPath: '/workspace/ops' },
     {
       existingPaths: new Set(['README.md']),
       fileContents: {},
     },
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
       excludeWorkspaceFolderNames: [],
-      availableWorkspaceFolderNames: ['01-keri-notes', '20-billing-ops-tasks'],
+      availableWorkspaceFolderNames: ['example-workspace', 'example-ops-workspace'],
     },
   );
 
@@ -1714,14 +1753,14 @@ test('detectProjectFromSnapshot ignores irrelevant workspace folders', () => {
 test('discoverWorkspaceProjects skips excluded workspace folders', async () => {
   const projects = await discoverWorkspaceProjects(
     [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/keripy' },
-      { name: '11-sphinx-doctor', fsPath: '/workspace/sphinx-doctor' },
+      { name: 'sphinx-doctor-extension', fsPath: '/workspace/sphinx-doctor' },
     ],
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
-      excludeWorkspaceFolderNames: ['01-keri-notes', '11-sphinx-doctor'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
+      excludeWorkspaceFolderNames: ['example-workspace', 'sphinx-doctor-extension'],
       knownProjects: [],
     },
     {
@@ -1741,7 +1780,7 @@ test('discoverWorkspaceProjectDecisions report discovered and skipped workspace 
 
   const decisions = await discoverWorkspaceProjectDecisions(
     [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
       { name: '03-hio', fsPath: '/workspace/notes/libs/hio' },
       { name: '08-watcher-hk', fsPath: '/workspace/notes/libs/watcher-hk' },
@@ -1749,8 +1788,8 @@ test('discoverWorkspaceProjectDecisions report discovered and skipped workspace 
     ],
     {
       includeLowConfidence: true,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
-      excludeWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
+      excludeWorkspaceFolderNames: ['example-workspace'],
       knownProjects: [],
     },
     {
@@ -1762,7 +1801,7 @@ test('discoverWorkspaceProjectDecisions report discovered and skipped workspace 
   assert.deepEqual(
     decisions.map((decision) => [decision.workspaceFolderName, decision.outcome, decision.reason]),
     [
-      ['01-keri-notes', 'skipped', 'excluded by sphinxDoctor.discovery.excludeWorkspaceFolders'],
+      ['example-workspace', 'skipped', 'excluded by sphinxDoctor.discovery.excludeWorkspaceFolders'],
       ['02-keripy', 'discovered', 'high-confidence marker: docs/conf.py'],
       ['03-hio', 'discovered', 'high-confidence marker: docs/source/conf.py'],
       ['08-watcher-hk', 'skipped', 'no high-confidence Sphinx conf.py marker found'],
@@ -1780,9 +1819,9 @@ test('detected projects still include a source mirror latest.json target for art
     },
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
       excludeWorkspaceFolderNames: [],
-      availableWorkspaceFolderNames: ['01-keri-notes', '02-keripy'],
+      availableWorkspaceFolderNames: ['example-workspace', '02-keripy'],
     },
   );
 
@@ -1807,7 +1846,7 @@ test('candidate repos with conf.py markers stay passive until docs Python exists
     const resolution = await inferProjectRefreshConfig({
       project,
       workspaceFolders: [
-        { name: '01-keri-notes', fsPath: '/workspace/notes' },
+        { name: 'example-workspace', fsPath: '/workspace/notes' },
         { name: project.sourceWorkspaceFolder, fsPath: sourceRoot },
       ],
       pathExists: async (filePath) => new Set([runnerPath, docsMarker]).has(filePath),
@@ -1936,7 +1975,7 @@ test('mergeProjects keeps explicit projects and suppresses discovered duplicates
         ...configuredProject,
         id: 'hio',
         sourceWorkspaceFolder: '03-hio',
-        inventoryWorkspaceFolder: '01-keri-notes',
+        inventoryWorkspaceFolder: 'example-workspace',
         discoveryConfidence: 'high',
         discoveryReasons: ['high-confidence marker: docs/source/conf.py'],
         origin: 'discovered',
@@ -1985,13 +2024,13 @@ test('parseGitWorktreeListPorcelain parses porcelain worktree entries', () => {
 test('discoverWorkspaceProjectDecisions discovers a synthetic worktree project for a known canonical project', async () => {
   const decisions = await discoverWorkspaceProjectDecisions(
     [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
     ],
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
-      excludeWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
+      excludeWorkspaceFolderNames: ['example-workspace'],
       knownProjects: [configuredProject],
     },
     {
@@ -2021,13 +2060,13 @@ test('discoverWorkspaceProjectDecisions discovers a synthetic worktree project f
 test('discoverWorkspaceProjectDecisions skips the canonical worktree root duplicate', async () => {
   const decisions = await discoverWorkspaceProjectDecisions(
     [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
     ],
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
-      excludeWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
+      excludeWorkspaceFolderNames: ['example-workspace'],
       knownProjects: [configuredProject],
     },
     {
@@ -2048,13 +2087,13 @@ test('discoverWorkspaceProjectDecisions skips the canonical worktree root duplic
 test('discoverWorkspaceProjectDecisions ignores worktrees without Sphinx markers', async () => {
   const decisions = await discoverWorkspaceProjectDecisions(
     [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
     ],
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
-      excludeWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
+      excludeWorkspaceFolderNames: ['example-workspace'],
       knownProjects: [configuredProject],
     },
     {
@@ -2075,13 +2114,13 @@ test('discoverWorkspaceProjectDecisions ignores worktrees without Sphinx markers
 test('discoverWorkspaceProjectDecisions rejects worktree paths outside the trusted workspace root', async () => {
   const decisions = await discoverWorkspaceProjectDecisions(
     [
-      { name: '01-keri-notes', fsPath: '/workspace/notes' },
+      { name: 'example-workspace', fsPath: '/workspace/notes' },
       { name: '02-keripy', fsPath: '/workspace/notes/libs/keripy' },
     ],
     {
       includeLowConfidence: false,
-      inventoryWorkspaceFolderNames: ['01-keri-notes'],
-      excludeWorkspaceFolderNames: ['01-keri-notes'],
+      inventoryWorkspaceFolderNames: ['example-workspace'],
+      excludeWorkspaceFolderNames: ['example-workspace'],
       knownProjects: [configuredProject],
     },
     {
@@ -2237,10 +2276,10 @@ test('createDebouncedTrigger coalesces multiple events into one refresh', () => 
 
 test('isExcludedWorkspaceFolder matches configured discovery exclusions', () => {
   assert.equal(
-    isExcludedWorkspaceFolder('01-keri-notes', ['01-keri-notes', '11-sphinx-doctor']),
+    isExcludedWorkspaceFolder('example-workspace', ['example-workspace', 'sphinx-doctor-extension']),
     true,
   );
-  assert.equal(isExcludedWorkspaceFolder('02-keripy', ['01-keri-notes']), false);
+  assert.equal(isExcludedWorkspaceFolder('02-keripy', ['example-workspace']), false);
 });
 
 test('refresh-on-save ignores generated artifacts under .sphinx-diagnostics', () => {

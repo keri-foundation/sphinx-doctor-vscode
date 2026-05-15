@@ -1,14 +1,14 @@
 # Multi-Root Workspace Model
 
-Sphinx Doctor must work in Jay's multi-root workspace, where the extension source repo is only one folder among many.
+Sphinx Doctor must work in a multi-root workspace where the extension source repo is only one folder among many.
 
 ## Four Distinct Locations
 
 The contract and future settings must distinguish between four locations:
 
-- extension repo: where Sphinx Doctor lives, currently `11-sphinx-doctor`
-- analyzed source repo: the repo whose files should receive diagnostics, for example `02-keripy`
-- inventory artifact location: where an inventory run was written, often `01-keri-notes/tmp/...`
+- extension repo: where Sphinx Doctor lives, for example `sphinx-doctor-extension`
+- analyzed source repo: the repo whose files should receive diagnostics, for example `keripy`
+- inventory artifact location: where an inventory run was written, often `example-workspace/tmp/...`
 - diagnostics mirror output: where `.sphinx-diagnostics/` should be written, usually inside the analyzed repo root
 
 These are often different places. Sphinx Doctor must not collapse them into one implied working directory.
@@ -21,8 +21,8 @@ These are often different places. Sphinx Doctor must not collapse them into one 
     {
       "id": "keripy",
       "label": "keripy",
-      "sourceWorkspaceFolder": "02-keripy",
-      "inventoryWorkspaceFolder": "01-keri-notes",
+      "sourceWorkspaceFolder": "keripy",
+      "inventoryWorkspaceFolder": "example-workspace",
       "repoRoot": ".",
       "docsRoot": "docs",
       "inventorySearchGlobs": [
@@ -47,7 +47,7 @@ The workspace folder whose files should receive diagnostics. This is the repo th
 
 ### `inventoryWorkspaceFolder`
 
-The workspace folder where the extension should search for inventory artifacts. In Jay's setup that may be `01-keri-notes`, because the inventory runner currently writes under `tmp/` there.
+The workspace folder where the extension should search for inventory artifacts. In one shared-workspace setup that may be `example-workspace`, because the inventory runner currently writes under `tmp/` there.
 
 ### `repoRoot`
 
@@ -71,7 +71,7 @@ The stable mirror directory relative to `sourceWorkspaceFolder`, usually `.sphin
 
 ## Why Broad `tmp/**` Scanning Is Forbidden
 
-Blanket scanning of `tmp/**` is a bad default in this workspace.
+Blanket scanning of `tmp/**` is a bad default in a large shared workspace.
 
 Problems it causes:
 
@@ -86,12 +86,12 @@ Sphinx Doctor should prefer explicit project objects and narrow globs over globa
 
 For a `keripy` project entry:
 
-1. find `sourceWorkspaceFolder = 02-keripy`
+1. find `sourceWorkspaceFolder = keripy`
 2. resolve repo paths against that workspace folder
-3. find `inventoryWorkspaceFolder = 01-keri-notes`
+3. find `inventoryWorkspaceFolder = example-workspace`
 4. search only the configured globs there
 5. load the preferred inventory file from the chosen run
-6. mirror the selected run into `02-keripy/.sphinx-diagnostics/`
-7. publish diagnostics against file URIs under `02-keripy`
+6. mirror the selected run into `keripy/.sphinx-diagnostics/`
+7. publish diagnostics against file URIs under `keripy`
 
 This keeps path ownership explicit across the whole workflow.

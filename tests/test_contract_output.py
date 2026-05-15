@@ -40,7 +40,7 @@ class ContractOutputTests(unittest.TestCase):
                     "--source-workspace-folder",
                     "02-keripy",
                     "--inventory-workspace-folder",
-                    "01-keri-notes",
+                    "example-workspace",
                     "--repo-root",
                     ".",
                     "--docs-root",

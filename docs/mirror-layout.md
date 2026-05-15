@@ -56,6 +56,6 @@ Benefits:
 
 ## Relationship To Inventory Inputs
 
-The mirror is not the same thing as the original inventory directory. A run may be discovered under a separate workspace folder such as `01-keri-notes/tmp/...`, then mirrored into the analyzed repo such as `02-keripy/.sphinx-diagnostics/`.
+The mirror is not the same thing as the original inventory directory. A run may be discovered under a separate workspace folder such as `example-workspace/tmp/...`, then mirrored into the analyzed repo such as `keripy/.sphinx-diagnostics/`.
 
 That distinction is part of the contract, not an implementation detail.

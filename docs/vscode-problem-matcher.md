@@ -75,11 +75,11 @@ Suggested pattern:
 
 ## Multi-Root Note
 
-In Jay's workspace:
+In a multi-root workspace:
 
-- `11-sphinx-doctor` is the tool repo
-- `02-keripy` may be the analyzed repo
-- `01-keri-notes` may be the inventory root
+- `sphinx-doctor-extension` is the tool repo
+- `keripy` may be the analyzed repo
+- `example-workspace` may be the inventory root
 
 That means a real task must set `options.cwd` intentionally. The example is a starting point, not the final multi-root extension architecture.
 
