@@ -10,7 +10,7 @@
 				"--new-window",
 				"--disable-extensions",
 				"--extensionDevelopmentPath=${workspaceFolder}",
-				"${workspaceFolder}/../../keri-notes.code-workspace"
+				"${workspaceFolder}/test/fixtures/simple-sphinx"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
@@ -25,12 +25,42 @@
 			"args": [
 				"--new-window",
 				"--extensionDevelopmentPath=${workspaceFolder}",
+				"${workspaceFolder}/test/fixtures/simple-sphinx"
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
+			"preLaunchTask": "npm: compile"
+		},
+		{
+			"name": "Run Sphinx Doctor Extension Host (KERI Workspace Example)",
+			"type": "extensionHost",
+			"request": "launch",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--new-window",
+				"--disable-extensions",
+				"--extensionDevelopmentPath=${workspaceFolder}",
 				"${workspaceFolder}/../../keri-notes.code-workspace"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
 			],
 			"preLaunchTask": "npm: compile"
+		},
+		{
+			"name": "Run Sphinx Doctor Integration Tests",
+			"type": "extensionHost",
+			"request": "launch",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}"
+			],
+			"outFiles": [
+				"${workspaceFolder}/out/**/*.js"
+			],
+			"testConfiguration": "${workspaceFolder}/.vscode-test.mjs",
+			"preLaunchTask": "Sphinx Doctor: Compile"
 		}
 	]
 }

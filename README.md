@@ -1,17 +1,45 @@
 # Sphinx Doctor
 
-Sphinx Doctor is a planned VS Code extension for turning Sphinx warnings and errors into actionable feedback for two audiences:
+Sphinx Doctor is a VS Code extension source repo for turning Sphinx warnings and errors into actionable feedback for two audiences:
 
 - humans working inside the editor
 - AI tooling that needs structured context about doc failures
 
-This repository started documentation-first and now includes a minimal extension runtime alongside the planning and contract material.
+This repository started documentation-first and now includes a working extension runtime alongside the planning and contract material. It is intended to grow as a general-purpose Sphinx diagnostics extension for Python documentation workflows. The KERI multi-root workspace remains an important example and stress case, but it is not the entire product identity.
 
-## Current Status
+## Status
 
-The repo now has a Python enrichment CLI, a short-term Problems bridge, and a VS Code extension runtime that can activate automatically, discover likely Sphinx projects from current workspace folders, run a bounded refresh command to produce fresh inventory artifacts, enrich raw inventory into `sphinx-diagnostics-v1`, watch diagnostics artifacts, and publish native Problems diagnostics while keeping the earlier manual commands available.
+- public incubation / early developer preview
+- useful for Sphinx-heavy Python workspaces and repo-local diagnostics workflows
+- not yet Marketplace-polished; the supported evaluation paths are source checkout plus local VSIX workflow
 
-The stable multi-root KERI workspace should not need a hard-coded `sphinxDoctor.projects` entry for a temporary cleanup worktree. Shared inventory roots such as `01-keri-notes` participate through bounded discovery and narrow inventory globs instead.
+## What Sphinx Doctor Does
+
+- loads Sphinx Doctor diagnostics artifacts from fixture files, repo-local mirrors, or project-selected inventory files
+- publishes native VS Code Problems diagnostics mapped back to source files when the artifact has usable source locations
+- keeps a clear distinction between Development Host, installed VSIX, and automated extension-host testing through `Sphinx Doctor: Troubleshoot Environment`
+- supports generic Sphinx projects while using the KERI workspace as one important multi-root example
+
+## Quick Start
+
+Use this repo to evaluate the extension in a generic Sphinx workspace before wiring it into a larger multi-root setup.
+
+1. Install dependencies with `npm ci`.
+2. Compile with `npm run compile`.
+3. Run the fast unit lane with `npm test`.
+4. Press `F5` and choose `Run Sphinx Doctor Extension Host`.
+5. In the Extension Development Host window, run `Sphinx Doctor: Troubleshoot Environment`.
+6. Run `Sphinx Doctor: Load Fixture Diagnostics` to prove the basic Problems flow against the bundled fixture, or run `Sphinx Doctor: Load Project Diagnostics` in a repo that already has a compatible `.sphinx-diagnostics/latest.json` artifact.
+7. Confirm the Problems view updates and that the troubleshoot report opens as a saved Markdown file rather than an unsaved editor buffer.
+
+For a generic Sphinx repo, the simplest activation signal is a conventional `docs/conf.py` file.
+
+## Known Limitations
+
+- diagnostics count explainability is present, but the broader count-trust story is still being hardened
+- refresh behavior and refresh-on-save clarity still need additional product hardening
+- non-KERI onboarding is improving, but the KERI workspace remains the best-covered multi-root example today
+- Marketplace release work is out of scope for the current incubation phase
 
 ## Initial Goals
 
@@ -39,16 +67,18 @@ Use `Sphinx Doctor: Show Status` for current extension status.
 
 ## Repo Documents
 
-- docs/product-scope.md defines the problem, users, scope, and non-goals
-- docs/architecture.md captures the target extension shape
-- docs/roadmap.md breaks the work into thin phases
-- docs/research-inbox.md is the landing zone for incoming research notes
-- docs/data-contract.md defines the JSON-first diagnostics contract
-- docs/mirror-layout.md defines the stable `.sphinx-diagnostics/` layout
-- docs/multi-root-workspace-model.md explains multi-root path ownership
-- docs/ai-packet-contract.md defines `latest-for-ai.md`
-- docs/vscode-problem-matcher.md explains the task-based Problems bridge
-- schema/sphinx-diagnostics-v1.schema.json is the versioned contract schema
+- [CONTRIBUTING.md](CONTRIBUTING.md) documents the supported contributor workflow
+- [CHANGELOG.md](CHANGELOG.md) tracks incubation-era repo changes
+- [docs/roadmap.md](docs/roadmap.md) outlines the current public incubation sequence and later roadmap
+- [docs/product-scope.md](docs/product-scope.md) defines the problem, users, scope, and non-goals
+- [docs/architecture.md](docs/architecture.md) captures the target extension shape
+- [docs/research-inbox.md](docs/research-inbox.md) is the landing zone for incoming research notes
+- [docs/data-contract.md](docs/data-contract.md) defines the JSON-first diagnostics contract
+- [docs/mirror-layout.md](docs/mirror-layout.md) defines the stable `.sphinx-diagnostics/` layout
+- [docs/multi-root-workspace-model.md](docs/multi-root-workspace-model.md) explains multi-root path ownership
+- [docs/ai-packet-contract.md](docs/ai-packet-contract.md) defines `latest-for-ai.md`
+- [docs/vscode-problem-matcher.md](docs/vscode-problem-matcher.md) explains the task-based Problems bridge
+- [schema/sphinx-diagnostics-v1.schema.json](schema/sphinx-diagnostics-v1.schema.json) is the versioned contract schema
 
 ## Working Assumptions
 
@@ -59,6 +89,7 @@ Use `Sphinx Doctor: Show Status` for current extension status.
 ## MVP Commands
 
 - `Sphinx Doctor: Publish Self-Test Diagnostic`
+- `Sphinx Doctor: Troubleshoot Environment`
 - `Sphinx Doctor: Load Diagnostics File`
 - `Sphinx Doctor: Load Fixture Diagnostics`
 - `Sphinx Doctor: Load Project Diagnostics`
@@ -70,49 +101,132 @@ Use `Sphinx Doctor: Show Status` for current extension status.
 - `Sphinx Doctor: Clear Diagnostics`
 - `Sphinx Doctor: Show Status`
 
-## Two Ways To Run Sphinx Doctor
+## Deterministic Development And Testing Workflow
 
-The extension has two intended paths. Use the one that matches the job.
+Use one workflow at a time. The most common source of confusion is proving that some Sphinx Doctor extension is running without proving which build is active.
 
-### Option A - Development Host
+`Sphinx Doctor: Troubleshoot Environment` is the source of truth for that check:
 
-Use this when you are changing extension code and want the Extension Development Host window.
+- use it first to confirm extension mode and extension path
+- it writes a timestamped Markdown report under the extension log location and opens that saved report
+- use it before and after reinstall or restart steps when a command seems stale
+- treat `Sphinx Doctor: Publish Self-Test Diagnostic` as proof that diagnostic publishing works, not proof that the newest build is active
 
-1. Stop any existing debug sessions with `Debug: Stop` or `Debug: Stop All` until the extra extension-host entries disappear from Call Stack.
-2. In the Sphinx Doctor repo, select `Run Sphinx Doctor Extension Host` in the debug dropdown.
-3. Press `F5` once.
-4. Use the new Extension Development Host window that opens.
-5. Run `Sphinx Doctor: Publish Self-Test Diagnostic`.
-6. Then run `Sphinx Doctor: Refresh Project Diagnostics` when you want to exercise the real producer path.
+### Workflow A - Development Host
+
+Use this when testing local source changes from this repo checkout.
+
+1. Open the Sphinx Doctor repo in VS Code.
+2. Compile with `npm run compile`, or rely on the existing `preLaunchTask` in the debug profile.
+3. Stop any existing extension-host sessions with `Debug: Stop` or `Debug: Stop All` until the extra extension-host entries disappear from Call Stack.
+4. Select `Run Sphinx Doctor Extension Host` in the debug dropdown.
+5. Press `F5` once.
+6. Use the new Extension Development Host window that opens as the actual test window.
+7. Run `Sphinx Doctor: Troubleshoot Environment`.
+8. Confirm the report shows `Development` mode and an extension path pointing to `libs/sphinx-doctor-vscode`.
+
+Optional repo-local tasks:
+
+- `Sphinx Doctor: Compile`
+- `Sphinx Doctor: Test`
+- `Sphinx Doctor: Test Integration`
+- `Sphinx Doctor: Test All`
+- `Sphinx Doctor: Test Package Install Local VSIX`
+
+Important notes:
+
+- after `package.json` command-contribution changes, restart the Extension Development Host instead of assuming `Developer: Reload Window` picked up the new manifest data
+- `Developer: Reload Window` only reloads the current window; it does not switch a normal VS Code window into the Extension Development Host
+- if `Sphinx Doctor: Troubleshoot Environment` is missing in the host window after a manifest change, the host is probably stale and should be restarted
 
 The secondary launch profile, `Run Sphinx Doctor Extension Host (Workspace Extensions Enabled)`, is only for cases where you intentionally want the rest of the workspace extensions available in the host window.
 
-### Option B - Install Locally
+### Workflow B - Installed VSIX
 
-Use this when you want Sphinx Doctor to behave like a normal extension in the regular KERI workspace. This is closer to the real day-to-day workflow.
+Use this when testing the packaged extension the way a normal user would in a regular VS Code window.
 
-1. From the extension repo, run `npm run package`.
+1. From `libs/sphinx-doctor-vscode`, run `npm run package`.
 2. Install the VSIX with `npm run install:local`, or use `Extensions: Install from VSIX` and choose the generated `.vsix` file.
-3. Reload the KERI workspace window.
-4. Follow the normal workflow above.
+3. Reload the target VS Code window.
+4. Run `Sphinx Doctor: Troubleshoot Environment`.
+5. Confirm the report shows `Production` mode and an extension path under the installed extensions directory.
 
-The `package` script uses `npm exec --yes --package @vscode/vsce -- vsce package`, so the packager is fetched on demand without a separate Yarn install or an interactive approval prompt. The `install:local` script expects the VS Code `code` shell command to be installed. If `code` is not available, use `Extensions: Install from VSIX` instead.
+Optional repo-local tasks:
 
-## Verify The Extension Is Running
+- `Sphinx Doctor: Package VSIX`
+- `Sphinx Doctor: Install Local VSIX`
+- `Sphinx Doctor: Test Package Install Local VSIX`
 
-Use the self-test command to separate extension visibility problems from Sphinx artifact problems. This is a troubleshooting path, not the normal day-to-day workflow.
+Important notes:
 
-In an Extension Development Host:
+- the `package` script uses `npm exec --yes --package @vscode/vsce -- vsce package`, so the packager is fetched on demand without a separate Yarn install or an interactive approval prompt
+- the `install:local` script already installs with `--force`
+- the `install:local` script expects the VS Code `code` shell command to be installed; if `code` is not available, use `Extensions: Install from VSIX` instead
+- if `Sphinx Doctor: Publish Self-Test Diagnostic` exists but `Sphinx Doctor: Troubleshoot Environment` does not, you are likely testing a stale installed VSIX or a different VS Code window than the one you reloaded
 
-1. Stop existing extension-host sessions if you already launched one by mistake.
-2. Select `Run Sphinx Doctor Extension Host`.
-3. Press `F5` once.
-2. In the host window, run `Sphinx Doctor: Publish Self-Test Diagnostic`.
-3. Confirm Problems shows exactly one Sphinx Doctor warning on the active file, or on this repo's `README.md` if no editor was already open.
-4. Run `Sphinx Doctor: Clear Diagnostics`.
-5. Confirm the self-test diagnostic disappears.
+### Workflow C - Automated Test Host
 
-If that command appears and publishes a warning, the VS Code diagnostic publishing layer is working in that window. If Problems still stays empty for real Sphinx data after that, the remaining issue is artifact discovery, loading, or compatibility rather than basic extension activation.
+Use this lane for repeatable source-based extension-host checks in a real VS Code test window.
+
+1. Run `npm run test:integration`.
+2. This compiles the repo, launches VS Code in test mode, opens `test/fixtures/simple-sphinx`, and loads the extension from source.
+3. The current integration slice proves activation, expected command registration, startup loading of a static fixture `.sphinx-diagnostics/latest.json`, manual loading through `Sphinx Doctor: Load Project Diagnostics`, mapped diagnostics publication, retained-only issues staying unpublished, and clear behavior.
+4. Run `npm run test:all` when you want both the fast unit lane and the real host lane together.
+
+Repo-local helpers for this lane:
+
+- `Sphinx Doctor: Test Integration`
+- `Sphinx Doctor: Test All`
+- `Run Sphinx Doctor Integration Tests` in `.vscode/launch.json`
+
+This lane still does not replace manual Development Host or Installed VSIX checks.
+
+### Clean Reinstall Workflow
+
+Use this when command contributions or package changes look stale in a normal installed-extension window.
+
+1. Run `npm run package`.
+2. Run `npm run install:local` again.
+3. Reload the target VS Code window.
+4. Run `Sphinx Doctor: Troubleshoot Environment` and confirm `Production` mode plus the installed extension path.
+
+If a normal reinstall still looks stale, use a conservative uninstall and reinstall path:
+
+1. Uninstall the extension from the VS Code Extensions UI, or run `code --uninstall-extension jaelliot.sphinx-doctor-vscode`.
+2. Run `npm run install:local`, or install the new `.vsix` from the Extensions UI.
+3. Reload the target VS Code window.
+4. Run `Sphinx Doctor: Troubleshoot Environment` again before doing any other smoke checks.
+
+Do not delete extension folders manually.
+
+The repo-local contributor workflow in [CONTRIBUTING.md](CONTRIBUTING.md) summarizes these lanes for public contributors.
+
+### Smoke-Test Checklist
+
+1. Run `npm run compile`.
+2. Run `npm test`.
+3. Run `npm run test:integration` or `npm run test:all` when you need the real extension-host lane.
+4. Use the bundled `test/fixtures/simple-sphinx` workspace or a generic Sphinx repo with `docs/conf.py` for smoke testing.
+5. Run `Sphinx Doctor: Troubleshoot Environment`.
+6. Confirm mode and extension path match the workflow you intended to test.
+7. Confirm the expected command exists in the Command Palette.
+8. Run `Sphinx Doctor: Publish Self-Test Diagnostic`.
+9. Confirm the Problems view shows the Sphinx Doctor warning.
+10. Run `Sphinx Doctor: Load Fixture Diagnostics` or `Sphinx Doctor: Load Project Diagnostics`.
+11. Confirm diagnostics appear in Problems for the expected file.
+12. Confirm the troubleshoot report is a saved Markdown file and not an untitled dirty buffer.
+13. Run `Sphinx Doctor: Clear Diagnostics`.
+14. Confirm the diagnostics disappear.
+15. If testing an installed VSIX, confirm `Production` mode and an installed extension path.
+16. If testing the Extension Development Host, confirm `Development` mode and the source repo path.
+
+### Which Window Am I In?
+
+- `Troubleshoot Environment` reports `Development` mode and the source checkout path: you are testing local source in the Extension Development Host.
+- `Troubleshoot Environment` reports `Production` mode and an installed extensions path: you are testing the packaged VSIX in a normal VS Code window.
+- `sphinxDoctor.*` settings show as unknown in a normal window: Sphinx Doctor is probably not installed or not running in that window.
+- `Publish Self-Test Diagnostic` works but `Troubleshoot Environment` is missing: you are probably in a stale host or stale installed-extension window.
+- New command contributions are missing right after a `package.json` change: restart the Extension Development Host or reinstall and reload the installed VSIX window.
 
 ## Refresh Project Diagnostics
 
@@ -134,7 +248,9 @@ If a refresh finds a much broader diagnostics universe than the current baseline
 
 When the current diagnostics baseline is a focused single-category lane, refresh preserves that category by passing the same category filter back into the inventory runner before the parity guard compares the new run.
 
-## Coverage Model
+## KERI Workspace Example
+
+The KERI workspace is the most exercised multi-root example today. It demonstrates how Sphinx Doctor behaves in a larger shared workspace, but it is not the only supported shape.
 
 - `02-keripy` is the current active, refresh-capable repo because it has a verified Sphinx marker, a working docs Python at `.venv-docs/bin/python`, and a valid inventory-runner path through `01-keri-notes/Devtools/sphinx/run_sphinx_inventory.sh`.
 - `03-hio`, `06-locksmith`, and `07-witness-hk` are passive discovery candidates only. Sphinx Doctor may discover them from high-confidence `conf.py` markers, but refresh stays blocked until each repo has a verified docs Python environment.
@@ -157,7 +273,7 @@ In a normal VS Code window:
 2. If `sphinxDoctor.*` settings show as Unknown Configuration Setting, Sphinx Doctor is probably not installed or not running in that window.
 3. Use the self-test command first before debugging inventory discovery.
 
-Option B is usually the easier path when the real goal is normal KERI workspace use rather than extension internals debugging.
+The installed VSIX lane is usually easier when the goal is normal editor use rather than extension internals debugging.
 
 ## Watch Mode
 

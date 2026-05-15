@@ -1,5 +1,27 @@
 # Roadmap
 
+## Public Incubation Sequence
+
+1. public repo hygiene
+2. diagnostics count explainability
+3. project-safe refresh and refresh-on-save clarity
+4. non-KERI fixture and non-KERI Sphinx workspace verification
+5. VSIX packaging validation
+6. Marketplace readiness later
+
+## Verification Checklist
+
+- `npm run compile`
+- `npm test`
+- `npm run test:integration` or `npm run test:all` when the slice affects extension-host behavior
+- manual Development Host smoke
+- manual installed VSIX smoke
+- generic non-KERI Sphinx fixture smoke
+- `Sphinx Doctor: Troubleshoot Environment`
+- `Sphinx Doctor: Publish Self-Test Diagnostic`
+- confirm diagnostics appear in the Problems panel
+- confirm troubleshoot reports open as saved Markdown files rather than unsaved editor state
+
 ## Phase 0
 
 Documentation bootstrap.
