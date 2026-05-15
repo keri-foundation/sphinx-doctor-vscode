@@ -1,5 +1,7 @@
 # Sphinx Doctor Architecture
 
+> Status: Design note. This document summarizes the current implementation shape and architecture background. For first-run usage and supported workflows, start with [README.md](../README.md).
+
 This document describes the current implementation in this repository. It is intentionally narrower than the earlier research notes and reflects the extension as it exists today.
 
 ## System Overview
