@@ -2,9 +2,9 @@ import * as assert from 'node:assert';
 import { test } from 'node:test';
 import { parseSphinxWarnings } from '../src/parser/SphinxWarningParser';
 
-test('parseSphinxWarnings parses standard warning with line number and category', () => {
+test('parseSphinxWarnings parses standard warning with line number and category', async () => {
   const content = '/path/to/file.py:42: WARNING: Unknown target name: "foo" [ref]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
     sourceWorkspaceFolder: 'test-workspace',
@@ -24,9 +24,9 @@ test('parseSphinxWarnings parses standard warning with line number and category'
   assert.strictEqual(issue.sourceWorkspaceFolder, 'test-workspace');
 });
 
-test('parseSphinxWarnings parses warning without category', () => {
+test('parseSphinxWarnings parses warning without category', async () => {
   const content = '/path/to/file.rst:10: WARNING: Unexpected indentation.';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -40,9 +40,9 @@ test('parseSphinxWarnings parses warning without category', () => {
   assert.strictEqual(issue.sourceRange?.startLine, 10);
 });
 
-test('parseSphinxWarnings parses warning without line number', () => {
+test('parseSphinxWarnings parses warning without line number', async () => {
   const content = '/path/to/file.py: WARNING: document isn\'t included in any toctree [toc]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -56,9 +56,9 @@ test('parseSphinxWarnings parses warning without line number', () => {
   assert.strictEqual(issue.sourceRange, null);
 });
 
-test('parseSphinxWarnings parses warning without location', () => {
+test('parseSphinxWarnings parses warning without location', async () => {
   const content = 'WARNING: Some global warning [misc]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -68,12 +68,12 @@ test('parseSphinxWarnings parses warning without location', () => {
   assert.strictEqual(result.unparsedCount, 0);
 });
 
-test('parseSphinxWarnings handles multiple warnings', () => {
+test('parseSphinxWarnings handles multiple warnings', async () => {
   const content = `/path/to/file1.py:10: WARNING: First warning [ref]
 /path/to/file2.py:20: WARNING: Second warning [autodoc]
 /path/to/file3.py: WARNING: Third warning without line [toc]`;
 
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -88,8 +88,8 @@ test('parseSphinxWarnings handles multiple warnings', () => {
   assert.strictEqual(result.issues[2].sourceRange, null);
 });
 
-test('parseSphinxWarnings handles empty content', () => {
-  const result = parseSphinxWarnings({
+test('parseSphinxWarnings handles empty content', async () => {
+  const result = await parseSphinxWarnings({
     warningFileContent: '',
     repoRoot: '/path/to',
   });
@@ -100,9 +100,9 @@ test('parseSphinxWarnings handles empty content', () => {
   assert.strictEqual(result.totalLines, 1);
 });
 
-test('parseSphinxWarnings handles content with only blank lines', () => {
+test('parseSphinxWarnings handles content with only blank lines', async () => {
   const content = '\n\n\n';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -113,9 +113,9 @@ test('parseSphinxWarnings handles content with only blank lines', () => {
   assert.strictEqual(result.totalLines, 4);
 });
 
-test('parseSphinxWarnings handles ERROR severity', () => {
+test('parseSphinxWarnings handles ERROR severity', async () => {
   const content = '/path/to/file.py:5: ERROR: Critical error [build]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -126,9 +126,9 @@ test('parseSphinxWarnings handles ERROR severity', () => {
   assert.strictEqual(result.issues[0].category, 'build');
 });
 
-test('parseSphinxWarnings handles INFO severity', () => {
+test('parseSphinxWarnings handles INFO severity', async () => {
   const content = '/path/to/file.py:15: INFO: Informational message [info]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -139,9 +139,9 @@ test('parseSphinxWarnings handles INFO severity', () => {
   assert.strictEqual(result.issues[0].category, 'info');
 });
 
-test('parseSphinxWarnings handles warning with colons in message', () => {
+test('parseSphinxWarnings handles warning with colons in message', async () => {
   const content = '/path/to/file.py:100: WARNING: Field list ends without a blank line; unexpected indentation. [field]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -152,9 +152,9 @@ test('parseSphinxWarnings handles warning with colons in message', () => {
   assert.strictEqual(result.issues[0].category, 'field');
 });
 
-test('parseSphinxWarnings computes correct repo-relative path', () => {
+test('parseSphinxWarnings computes correct repo-relative path', async () => {
   const content = '/workspace/project/src/module/file.py:50: WARNING: Test warning [test]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/workspace/project',
   });
@@ -164,9 +164,9 @@ test('parseSphinxWarnings computes correct repo-relative path', () => {
   assert.strictEqual(result.issues[0].repoRelativePath, 'src/module/file.py');
 });
 
-test('parseSphinxWarnings skips warnings outside repo root', () => {
+test('parseSphinxWarnings skips warnings outside repo root', async () => {
   const content = '/other/path/file.py:10: WARNING: External warning [ext]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/workspace/project',
   });
@@ -176,9 +176,9 @@ test('parseSphinxWarnings skips warnings outside repo root', () => {
   assert.strictEqual(result.unparsedCount, 0);
 });
 
-test('parseSphinxWarnings preserves raw warning text', () => {
+test('parseSphinxWarnings preserves raw warning text', async () => {
   const content = '/path/to/file.py:42: WARNING: Original warning text [cat]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -188,11 +188,11 @@ test('parseSphinxWarnings preserves raw warning text', () => {
   assert.strictEqual(result.issues[0].raw, content);
 });
 
-test('parseSphinxWarnings generates unique IDs for each issue', () => {
+test('parseSphinxWarnings generates unique IDs for each issue', async () => {
   const content = `/path/to/file1.py:10: WARNING: First [ref]
 /path/to/file2.py:20: WARNING: Second [ref]`;
 
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -202,9 +202,9 @@ test('parseSphinxWarnings generates unique IDs for each issue', () => {
   assert.notStrictEqual(result.issues[0].id, result.issues[1].id);
 });
 
-test('parseSphinxWarnings sets publishDiagnostic to true', () => {
+test('parseSphinxWarnings sets publishDiagnostic to true', async () => {
   const content = '/path/to/file.py:10: WARNING: Test [test]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -214,9 +214,9 @@ test('parseSphinxWarnings sets publishDiagnostic to true', () => {
   assert.strictEqual(result.issues[0].publishDiagnostic, true);
 });
 
-test('parseSphinxWarnings sets mapping metadata', () => {
+test('parseSphinxWarnings sets mapping metadata', async () => {
   const content = '/path/to/file.py:42: WARNING: Test [test]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -230,9 +230,9 @@ test('parseSphinxWarnings sets mapping metadata', () => {
   assert.strictEqual(mapping.lineResolved, true);
 });
 
-test('parseSphinxWarnings sets lower confidence for warnings without line numbers', () => {
+test('parseSphinxWarnings sets lower confidence for warnings without line numbers', async () => {
   const content = '/path/to/file.py: WARNING: Test without line [test]';
-  const result = parseSphinxWarnings({
+  const result = await parseSphinxWarnings({
     warningFileContent: content,
     repoRoot: '/path/to',
   });
@@ -242,4 +242,178 @@ test('parseSphinxWarnings sets lower confidence for warnings without line number
   const mapping = result.issues[0].mapping;
   assert.strictEqual(mapping.confidence, 'medium');
   assert.strictEqual(mapping.lineResolved, false);
+});
+
+test('parseSphinxWarnings parses docstring warning with ERROR severity', async () => {
+  const content = '/path/to/src/keri/app/habbing.py:docstring of keri.app.habbing.BaseHab.endorse:7: ERROR: Unexpected indentation. [docutils]';
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.unparsedCount, 0);
+  assert.strictEqual(result.unmappedCount, 0);
+
+  const issue = result.issues[0];
+  assert.strictEqual(issue.severity, 'error');
+  assert.strictEqual(issue.category, 'docutils');
+  assert.strictEqual(issue.message, 'Unexpected indentation. (in keri.app.habbing.BaseHab.endorse)');
+  assert.strictEqual(issue.repoRelativePath, 'src/keri/app/habbing.py');
+  assert.strictEqual(issue.sourceRange?.startLine, 7);
+  assert.strictEqual(issue.sourceRange?.anchorKind, 'docstring-line');
+  assert.strictEqual(issue.mapping.confidence, 'medium');
+  assert.strictEqual(issue.mapping.strategy, 'sphinx-docstring-warning');
+  assert.strictEqual(issue.mapping.objectResolved, true);
+  assert.strictEqual(issue.mapping.lineResolved, false);
+});
+
+test('parseSphinxWarnings parses docstring warning with WARNING severity', async () => {
+  const content = '/path/to/src/keri/app/habbing.py:docstring of keri.app.habbing.BaseHab.endorse:10: WARNING: Block quote ends without a blank line; unexpected unindent. [docutils]';
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.unparsedCount, 0);
+
+  const issue = result.issues[0];
+  assert.strictEqual(issue.severity, 'warning');
+  assert.strictEqual(issue.category, 'docutils');
+  assert.strictEqual(issue.message, 'Block quote ends without a blank line; unexpected unindent. (in keri.app.habbing.BaseHab.endorse)');
+  assert.strictEqual(issue.sourceRange?.startLine, 10);
+});
+
+test('parseSphinxWarnings parses docstring warning without category', async () => {
+  const content = '/path/to/file.py:docstring of module.Class.method:5: ERROR: Some error';
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.unparsedCount, 0);
+
+  const issue = result.issues[0];
+  assert.strictEqual(issue.severity, 'error');
+  assert.strictEqual(issue.category, 'docutils'); // defaults to docutils
+  assert.strictEqual(issue.message, 'Some error (in module.Class.method)');
+});
+
+test('parseSphinxWarnings parses docstring warning with nested object path', async () => {
+  const content = '/path/to/file.py:docstring of keri.core.coring.Matter.__init__:3: ERROR: Unexpected indentation. [docutils]';
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.unparsedCount, 0);
+
+  const issue = result.issues[0];
+  assert.ok(issue.message.includes('keri.core.coring.Matter.__init__'));
+  assert.strictEqual(issue.sourceRange?.startLine, 3);
+});
+
+test('parseSphinxWarnings handles multiple docstring warnings', async () => {
+  const content = `/path/to/file.py:docstring of module.Class.method1:7: ERROR: Error 1 [docutils]
+/path/to/file.py:docstring of module.Class.method2:10: WARNING: Warning 2 [docutils]
+/path/to/file.py:docstring of module.Class.method3:15: ERROR: Error 3 [docutils]`;
+
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 3);
+  assert.strictEqual(result.unparsedCount, 0);
+  assert.strictEqual(result.unmappedCount, 0);
+
+  assert.strictEqual(result.issues[0].sourceRange?.startLine, 7);
+  assert.strictEqual(result.issues[1].sourceRange?.startLine, 10);
+  assert.strictEqual(result.issues[2].sourceRange?.startLine, 15);
+});
+
+test('parseSphinxWarnings handles mixed warning types including docstring', async () => {
+  const content = `/path/to/file1.py:10: WARNING: Standard warning [ref]
+/path/to/file2.py:docstring of module.Class.method:5: ERROR: Docstring error [docutils]
+/path/to/file3.py: WARNING: File-only warning [toc]
+WARNING: Global warning [misc]`;
+
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 3); // 3 mapped, 1 unmapped (global)
+  assert.strictEqual(result.unmappedCount, 1);
+  assert.strictEqual(result.unparsedCount, 0);
+
+  // Check that we have different types
+  const strategies = result.issues.map(i => i.mapping.strategy);
+  assert.ok(strategies.includes('sphinx-warning-file'));
+  assert.ok(strategies.includes('sphinx-docstring-warning'));
+});
+
+test('parseSphinxWarnings preserves raw docstring warning text', async () => {
+  const content = '/path/to/file.py:docstring of module.Class.method:7: ERROR: Test error [docutils]';
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.unparsedCount, 0);
+  assert.strictEqual(result.issues[0].raw, content);
+});
+
+test('parseSphinxWarnings generates unique IDs for docstring warnings', async () => {
+  const content = `/path/to/file.py:docstring of module.Class.method1:7: ERROR: Error 1 [docutils]
+/path/to/file.py:docstring of module.Class.method2:7: ERROR: Error 2 [docutils]`;
+
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 2);
+  assert.strictEqual(result.unparsedCount, 0);
+  assert.notStrictEqual(result.issues[0].id, result.issues[1].id);
+});
+
+test('parseSphinxWarnings sets publishDiagnostic to true for docstring warnings', async () => {
+  const content = '/path/to/file.py:docstring of module.Class.method:7: ERROR: Test [docutils]';
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.unparsedCount, 0);
+  assert.strictEqual(result.issues[0].publishDiagnostic, true);
+});
+
+test('parseSphinxWarnings handles docstring warning with colons in message', async () => {
+  const content = '/path/to/file.py:docstring of module.Class.method:7: WARNING: Field list ends without a blank line; unexpected indentation. [docutils]';
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/path/to',
+  });
+
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.unparsedCount, 0);
+  assert.ok(result.issues[0].message.includes('Field list ends without a blank line; unexpected indentation.'));
+});
+
+test('parseSphinxWarnings handles docstring warning outside repo root', async () => {
+  const content = '/other/path/file.py:docstring of module.Class.method:7: ERROR: External error [docutils]';
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/workspace/project',
+  });
+
+  assert.strictEqual(result.issues.length, 0);
+  assert.strictEqual(result.unmappedCount, 1);
+  assert.strictEqual(result.unparsedCount, 0);
 });

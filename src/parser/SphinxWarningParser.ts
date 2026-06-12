@@ -6,6 +6,7 @@ import {
   DiagnosticsMapping,
   DiagnosticsSourceRange,
 } from '../types';
+import { mapDocstringLines, DocstringMapping } from './PythonDocstringLocator';
 
 /**
  * Discriminated union representing parsed Sphinx warning variants.
@@ -16,6 +17,16 @@ export type ParsedSphinxWarning =
       kind: 'located';
       filePath: string;
       line: number;
+      severity: 'WARNING' | 'ERROR' | 'INFO';
+      message: string;
+      category?: string;
+      raw: string;
+    }
+  | {
+      kind: 'docstring';
+      filePath: string;
+      objectPath: string;
+      docstringLine: number;
       severity: 'WARNING' | 'ERROR' | 'INFO';
       message: string;
       category?: string;
@@ -57,9 +68,11 @@ export interface ParseSphinxWarningsResult {
 /**
  * Parse Sphinx warning format: <path>:<line>: WARNING: <message> [<category>]
  * or: <path>:<line>: <severity>: <message> [<category>]
+ * or: <path>:docstring of <object>:<line>: <severity>: <message> [<category>]
  * or: WARNING: <message> [<category>] (no location)
  */
 const WARNING_PATTERN = /^(.+?):(\d+):\s*(WARNING|ERROR|INFO):\s*(.+?)(?:\s*\[([^\]]+)\])?$/;
+const DOCSTRING_WARNING_PATTERN = /^(.+?):docstring of (.+?):(\d+):\s*(WARNING|ERROR|INFO):\s*(.+?)(?:\s*\[([^\]]+)\])?$/;
 const WARNING_NO_LINE_PATTERN = /^(.+?):\s*(WARNING|ERROR|INFO):\s*(.+?)(?:\s*\[([^\]]+)\])?$/;
 const WARNING_NO_LOCATION_PATTERN = /^(WARNING|ERROR|INFO):\s*(.+?)(?:\s*\[([^\]]+)\])?$/;
 
@@ -77,8 +90,23 @@ function parseWarningLine(line: string): ParsedSphinxWarning {
     return { kind: 'unparsed', raw: line };
   }
 
+  // Try docstring pattern first (more specific)
+  let match = DOCSTRING_WARNING_PATTERN.exec(trimmed);
+  if (match) {
+    return {
+      kind: 'docstring',
+      filePath: match[1],
+      objectPath: match[2],
+      docstringLine: parseInt(match[3], 10),
+      severity: match[4].toUpperCase() as 'WARNING' | 'ERROR' | 'INFO',
+      message: match[5],
+      category: match[6],
+      raw: trimmed,
+    };
+  }
+
   // Try pattern with line number
-  let match = WARNING_PATTERN.exec(trimmed);
+  match = WARNING_PATTERN.exec(trimmed);
   if (match) {
     return {
       kind: 'located',
@@ -144,6 +172,7 @@ function createDiagnosticsIssue(
   repoRoot: string,
   sourceWorkspaceFolder?: string,
   index?: number,
+  astMapping?: DocstringMapping,
 ): DiagnosticsIssue | null {
   switch (warning.kind) {
     case 'located': {
@@ -180,6 +209,54 @@ function createDiagnosticsIssue(
         repoRelativePath,
         inventoryRelativePath: repoRelativePath,
         rawLocation: warning.filePath,
+        sourceRange,
+        mapping,
+        publishDiagnostic: true,
+        related: [],
+        sourceWorkspaceFolder,
+      };
+    }
+
+    case 'docstring': {
+      const repoRelativePath = toRepoRelativePath(warning.filePath, repoRoot);
+      if (!repoRelativePath) {
+        return null;
+      }
+
+      // Use AST mapping if available, otherwise fall back to docstring-relative line
+      const absoluteLine = astMapping?.absoluteLine ?? warning.docstringLine;
+      const confidence = astMapping?.confidence ?? 'medium';
+      const reason = astMapping?.reason ?? `Docstring warning for ${warning.objectPath} at line ${warning.docstringLine} (no AST mapping available)`;
+      const lineResolved = astMapping?.confidence === 'high';
+
+      const sourceRange: DiagnosticsSourceRange = {
+        startLine: absoluteLine,
+        startColumn: 0,
+        endLine: absoluteLine,
+        endColumn: 0,
+        anchorKind: 'docstring-line',
+      };
+
+      const mapping: DiagnosticsMapping = {
+        confidence,
+        strategy: 'sphinx-docstring-warning',
+        reason,
+        objectResolved: true,
+        lineResolved,
+      };
+
+      const id = `sphinx-${index ?? Date.now()}-${repoRelativePath}-${warning.objectPath}-${warning.docstringLine}`;
+
+      return {
+        id,
+        severity: warning.severity.toLowerCase(),
+        category: warning.category ?? 'docutils',
+        code: warning.category ?? 'docutils',
+        message: `${warning.message} (in ${warning.objectPath})`,
+        raw: warning.raw,
+        repoRelativePath,
+        inventoryRelativePath: repoRelativePath,
+        rawLocation: `${warning.filePath}:docstring of ${warning.objectPath}:${warning.docstringLine}`,
         sourceRange,
         mapping,
         publishDiagnostic: true,
@@ -235,11 +312,20 @@ function createDiagnosticsIssue(
   }
 }
 
-export function parseSphinxWarnings(options: ParseSphinxWarningsOptions): ParseSphinxWarningsResult {
+export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): Promise<ParseSphinxWarningsResult> {
   const lines = options.warningFileContent.split('\n');
   const issues: DiagnosticsIssue[] = [];
   let unmappedCount = 0;
   let unparsedCount = 0;
+
+  // First pass: parse all warnings and collect docstring warnings that need AST mapping
+  const parsedWarnings: Array<{ parsed: ParsedSphinxWarning; index: number }> = [];
+  const docstringMappings: Array<{
+    filePath: string;
+    objectPath: string;
+    docstringLine: number;
+    index: number;
+  }> = [];
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -257,11 +343,39 @@ export function parseSphinxWarnings(options: ParseSphinxWarningsOptions): ParseS
       continue;
     }
 
+    parsedWarnings.push({ parsed, index: i });
+
+    // Collect docstring warnings for batch AST mapping
+    if (parsed.kind === 'docstring') {
+      docstringMappings.push({
+        filePath: parsed.filePath,
+        objectPath: parsed.objectPath,
+        docstringLine: parsed.docstringLine,
+        index: i,
+      });
+    }
+  }
+
+  // Batch map all docstring warnings using AST
+  const astResults = docstringMappings.length > 0
+    ? await mapDocstringLines(docstringMappings)
+    : [];
+
+  // Create a map from original index to AST mapping result
+  const astMappingMap = new Map<number, DocstringMapping>();
+  for (let i = 0; i < docstringMappings.length; i++) {
+    astMappingMap.set(docstringMappings[i].index, astResults[i]);
+  }
+
+  // Second pass: create issues with AST-mapped line numbers
+  for (const { parsed, index } of parsedWarnings) {
+    const astMapping = astMappingMap.get(index);
     const issue = createDiagnosticsIssue(
       parsed,
       options.repoRoot,
       options.sourceWorkspaceFolder,
-      i,
+      index,
+      astMapping,
     );
 
     if (issue) {
