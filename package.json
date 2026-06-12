@@ -18,14 +18,16 @@
     "workspaceContains:docs/conf.py",
     "workspaceContains:doc/conf.py",
     "workspaceContains:source/conf.py",
-    "workspaceContains:conf.py"
+    "workspaceContains:conf.py",
+    "onCommand:sphinxDoctor.runSphinxBuild"
   ],
   "categories": [
     "Other"
   ],
   "main": "./out/src/extension.js",
   "scripts": {
-    "compile": "tsc -p ./",
+    "compile": "tsc -p ./ && npm run copy-wasm",
+    "copy-wasm": "node scripts/copy-wasm.js",
     "watch": "tsc -w -p ./",
     "test": "npm run test:unit",
     "test:unit": "npm run compile && node --test out/tests/extension.test.js",
@@ -355,5 +357,9 @@
     "@vscode/test-electron": "^2.5.2",
     "mocha": "^11.1.0",
     "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.26.9"
   }
 }

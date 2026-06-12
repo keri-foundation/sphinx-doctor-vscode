@@ -6,7 +6,8 @@ import {
   DiagnosticsMapping,
   DiagnosticsSourceRange,
 } from '../types';
-import { mapDocstringLines, DocstringMapping } from './PythonDocstringLocator';
+import { TreeSitterDocstringLocator } from './TreeSitterDocstringLocator';
+import { DocstringLocationRequest, DocstringLocationResult } from './DocstringLocator';
 
 /**
  * Discriminated union representing parsed Sphinx warning variants.
@@ -172,7 +173,7 @@ function createDiagnosticsIssue(
   repoRoot: string,
   sourceWorkspaceFolder?: string,
   index?: number,
-  astMapping?: DocstringMapping,
+  astMapping?: DocstringLocationResult,
 ): DiagnosticsIssue | null {
   switch (warning.kind) {
     case 'located': {
@@ -224,7 +225,7 @@ function createDiagnosticsIssue(
       }
 
       // Use AST mapping if available, otherwise fall back to docstring-relative line
-      const absoluteLine = astMapping?.absoluteLine ?? warning.docstringLine;
+      const absoluteLine = astMapping?.targetLine ?? warning.docstringLine;
       const confidence = astMapping?.confidence ?? 'medium';
       const reason = astMapping?.reason ?? `Docstring warning for ${warning.objectPath} at line ${warning.docstringLine} (no AST mapping available)`;
       const lineResolved = astMapping?.confidence === 'high';
@@ -356,13 +357,24 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
     }
   }
 
-  // Batch map all docstring warnings using AST
-  const astResults = docstringMappings.length > 0
-    ? await mapDocstringLines(docstringMappings)
-    : [];
+  // Batch map all docstring warnings using Tree-sitter
+  let astResults: DocstringLocationResult[] = [];
+  if (docstringMappings.length > 0) {
+    const locator = new TreeSitterDocstringLocator();
+    try {
+      const requests: DocstringLocationRequest[] = docstringMappings.map((m) => ({
+        filePath: m.filePath,
+        objectPath: m.objectPath,
+        docstringLine: m.docstringLine,
+      }));
+      astResults = await locator.locateBatch(requests);
+    } finally {
+      locator.dispose();
+    }
+  }
 
   // Create a map from original index to AST mapping result
-  const astMappingMap = new Map<number, DocstringMapping>();
+  const astMappingMap = new Map<number, DocstringLocationResult>();
   for (let i = 0; i < docstringMappings.length; i++) {
     astMappingMap.set(docstringMappings[i].index, astResults[i]);
   }
