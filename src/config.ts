@@ -188,5 +188,12 @@ export function getExtensionConfig(): ExtensionConfig {
     refreshAutoRunOnSave: asBoolean(configuration.get('refresh.autoRunOnSave')) ?? false,
     refreshDebounceMs: coerceRefreshDebounceMs(configuration.get('refresh.debounceMs')),
     logLevel: coerceLogLevel(configuration.get('logLevel', 'info')),
+    directRunEnabled: asBoolean(configuration.get('directRun.enabled')) ?? true,
+    sphinxCommand: asString(configuration.get('sphinx.command')) ?? 'sphinx-build',
+    sphinxBuilder: asString(configuration.get('sphinx.builder')) ?? 'dirhtml',
+    sphinxSourceDir: asString(configuration.get('sphinx.sourceDir')) ?? 'docs',
+    sphinxOutputDir: asString(configuration.get('sphinx.outputDir')) ?? '.tmp/sphinx-doctor/dirhtml',
+    sphinxWarningFile: asString(configuration.get('sphinx.warningFile')) ?? '.tmp/sphinx-doctor/warnings.log',
+    sphinxExtraArgs: asStringArray(configuration.get('sphinx.extraArgs')),
   };
 }

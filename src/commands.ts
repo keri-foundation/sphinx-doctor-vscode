@@ -35,6 +35,13 @@ import {
   inferProjectRefreshConfig,
   runRefreshPlan,
 } from './refreshRunner';
+import {
+  buildSphinxRunPlan,
+  getSphinxRunPermission,
+  runSphinxPlan,
+  SphinxRunConfig,
+} from './runner/SphinxDoctorRunner';
+import { parseSphinxWarningsFromFile } from './parser/SphinxWarningParser';
 import { SphinxDoctorLogger } from './log';
 import { computeDiagnosticsAccounting, publishDiagnostics, PublishLogger } from './publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
@@ -51,7 +58,7 @@ import {
   SELF_TEST_STATUS_TEXT,
 } from './selfTest';
 import { DiagnosticsPublicationIndex } from './publicationIndex';
-import { ConfiguredProject, LastLoadedDiagnosticsState, WorkspaceFolderInfo } from './types';
+import { ConfiguredProject, DiagnosticsContract, LastLoadedDiagnosticsState, WorkspaceFolderInfo } from './types';
 import { SphinxDoctorWatchMode } from './watchMode';
 import {
   findWorkspaceFolderByName,
@@ -59,6 +66,9 @@ import {
 } from './workspace';
 
 const LAST_DIAGNOSTICS_STATE_KEY = 'sphinxDoctor.lastLoadedDiagnostics';
+
+// Single-flight tracking for Sphinx build command
+let sphinxBuildInProgress = false;
 
 interface CommandDependencies {
   collection: vscode.DiagnosticCollection;
@@ -1218,6 +1228,216 @@ export function registerCommands(
           `Sphinx Doctor troubleshoot report saved: ${path.basename(reportLocation)}`,
           5000,
         );
+      });
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('sphinxDoctor.runSphinxBuild', async () => {
+      await runSafely(dependencies.logger, 'Run Sphinx Build', async () => {
+        // Check if a build is already in progress
+        if (sphinxBuildInProgress) {
+          void vscode.window.showWarningMessage(
+            'Sphinx Doctor: A Sphinx build is already in progress. Please wait for it to complete.',
+          );
+          return;
+        }
+
+        const config = getExtensionConfig();
+        dependencies.logger.setLevel(config.logLevel);
+
+        // Check if direct run is enabled
+        const sphinxConfig: SphinxRunConfig = {
+          enabled: config.directRunEnabled,
+          command: config.sphinxCommand,
+          builder: config.sphinxBuilder,
+          sourceDir: config.sphinxSourceDir,
+          outputDir: config.sphinxOutputDir,
+          warningFile: config.sphinxWarningFile,
+          extraArgs: config.sphinxExtraArgs,
+        };
+
+        const permission = getSphinxRunPermission(vscode.workspace.isTrusted, sphinxConfig);
+        if (!permission.allowed) {
+          void vscode.window.showWarningMessage(
+            `Sphinx Doctor cannot run Sphinx build: ${permission.reason}`,
+          );
+          return;
+        }
+
+        // Get workspace folder
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0) {
+          void vscode.window.showWarningMessage(
+            'Sphinx Doctor requires an open workspace folder to run Sphinx build.',
+          );
+          return;
+        }
+
+        // Use first workspace folder or let user pick if multiple
+        let selectedFolder: vscode.WorkspaceFolder;
+        if (workspaceFolders.length === 1) {
+          selectedFolder = workspaceFolders[0];
+        } else {
+          const picked = await vscode.window.showWorkspaceFolderPick({
+            placeHolder: 'Select workspace folder for Sphinx build',
+          });
+          if (!picked) {
+            return;
+          }
+          selectedFolder = picked;
+        }
+
+        const workspaceFolderInfo: WorkspaceFolderInfo = {
+          name: selectedFolder.name,
+          fsPath: selectedFolder.uri.fsPath,
+        };
+
+        // Mark build as in progress
+        sphinxBuildInProgress = true;
+
+        try {
+          dependencies.logger.info(
+            `Running Sphinx build in workspace folder: ${workspaceFolderInfo.name} (${workspaceFolderInfo.fsPath})`,
+          );
+
+          // Build run plan
+          const plan = buildSphinxRunPlan({
+            config: sphinxConfig,
+            workspaceFolders: [workspaceFolderInfo],
+            cwdWorkspaceFolder: workspaceFolderInfo.name,
+          });
+
+          dependencies.logger.info(
+            `Sphinx build plan: command=${plan.command}, args=${plan.args.join(' ')}, cwd=${plan.cwd}`,
+          );
+
+          // Run with progress
+          const result = await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: 'Sphinx Doctor: Running Sphinx build',
+              cancellable: true,
+            },
+            async (_progress, token) => {
+              return await runSphinxPlan(plan, { cancellationToken: token });
+            },
+          );
+
+          dependencies.logger.info(
+            `Sphinx build completed: status=${result.status}, exitCode=${result.exitCode}, warningFileExists=${result.warningFileExists}`,
+          );
+
+          if (result.stdout) {
+            dependencies.logger.info(`Sphinx stdout:\n${result.stdout}`);
+          }
+          if (result.stderr) {
+            dependencies.logger.info(`Sphinx stderr:\n${result.stderr}`);
+          }
+
+          // Handle cancellation
+          if (result.status === 'canceled') {
+            dependencies.logger.info('Sphinx build was canceled by user');
+            void vscode.window.showInformationMessage('Sphinx Doctor: Build canceled.');
+            return;
+          }
+
+          // Handle failure
+          if (result.status === 'failed' && !result.warningFileExists) {
+            void vscode.window.showErrorMessage(
+              `Sphinx build failed with exit code ${result.exitCode}. Check the output channel for details.`,
+            );
+            return;
+          }
+
+          // Parse warnings if file exists
+          if (!result.warningFileExists) {
+            void vscode.window.showInformationMessage(
+              'Sphinx build completed successfully with no warnings.',
+            );
+            return;
+          }
+
+          dependencies.logger.info(`Parsing warnings from: ${plan.warningFile}`);
+
+          const parseResult = await parseSphinxWarningsFromFile(
+            plan.warningFile,
+            workspaceFolderInfo.fsPath,
+            workspaceFolderInfo.name,
+          );
+
+          dependencies.logger.info(
+            `Parsed ${parseResult.issues.length} warnings (${parseResult.unmappedCount} unmapped) from ${parseResult.totalLines} lines`,
+          );
+
+          if (parseResult.issues.length === 0) {
+            void vscode.window.showInformationMessage(
+              'Sphinx build completed with no parseable warnings.',
+            );
+            return;
+          }
+
+          // Create a diagnostics contract from parsed warnings
+          const contract: DiagnosticsContract = {
+            schema: 'sphinx-diagnostics-v1',
+            schemaVersion: 1,
+            generatedAt: new Date().toISOString(),
+            tool: {
+              name: 'sphinx-doctor-direct',
+              version: '0.1.0',
+            },
+            workspace: {
+              sourceWorkspaceFolder: workspaceFolderInfo.name,
+              repoRoot: '.',
+            },
+            run: {
+              id: `direct-${Date.now()}`,
+              source: 'direct-sphinx-build',
+              inventoryFile: plan.warningFile,
+              inventoryDir: path.dirname(plan.warningFile),
+            },
+            summary: {
+              total: parseResult.issues.length,
+              bySeverity: parseResult.issues.reduce((acc, issue) => {
+                acc[issue.severity] = (acc[issue.severity] || 0) + 1;
+                return acc;
+              }, {} as Record<string, number>),
+              byCategory: parseResult.issues.reduce((acc, issue) => {
+                acc[issue.category] = (acc[issue.category] || 0) + 1;
+                return acc;
+              }, {} as Record<string, number>),
+              mappedCount: parseResult.issues.length,
+              unmappedCount: parseResult.unmappedCount,
+              publishedDiagnostics: parseResult.issues.length,
+              retainedOnly: 0,
+            },
+            issues: parseResult.issues,
+          };
+
+          // Publish diagnostics
+          const publishResult = publishDiagnostics(
+            dependencies.collection,
+            contract,
+            {
+              workspaceFolders: [selectedFolder],
+              diagnosticMode: config.diagnosticsMode,
+              defaultSourceWorkspaceFolder: workspaceFolderInfo.name,
+              defaultRepoRoot: '.',
+              logger: dependencies.logger,
+            },
+          );
+
+          dependencies.logger.info(
+            `Published ${publishResult.publishedDiagnostics} diagnostics from Sphinx build`,
+          );
+
+          void vscode.window.showInformationMessage(
+            `Sphinx Doctor: Published ${publishResult.publishedDiagnostics} diagnostics from Sphinx build (${parseResult.unmappedCount} unmapped warnings).`,
+          );
+        } finally {
+          // Always reset the single-flight flag
+          sphinxBuildInProgress = false;
+        }
       });
     }),
   );

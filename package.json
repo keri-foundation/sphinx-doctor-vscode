@@ -94,6 +94,10 @@
       {
         "command": "sphinxDoctor.troubleshootEnvironment",
         "title": "Sphinx Doctor: Troubleshoot Environment"
+      },
+      {
+        "command": "sphinxDoctor.runSphinxBuild",
+        "title": "Sphinx Doctor: Run Sphinx Build"
       }
     ],
     "configuration": {
@@ -301,6 +305,44 @@
           ],
           "default": "info",
           "description": "Log level for the Sphinx Doctor output channel."
+        },
+        "sphinxDoctor.directRun.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow Sphinx Doctor to run sphinx-build directly from VS Code."
+        },
+        "sphinxDoctor.sphinx.command": {
+          "type": "string",
+          "default": "sphinx-build",
+          "description": "Sphinx build command executable."
+        },
+        "sphinxDoctor.sphinx.builder": {
+          "type": "string",
+          "default": "dirhtml",
+          "description": "Sphinx builder name (e.g., html, dirhtml, latex)."
+        },
+        "sphinxDoctor.sphinx.sourceDir": {
+          "type": "string",
+          "default": "docs",
+          "description": "Source directory for Sphinx documentation, relative to workspace folder."
+        },
+        "sphinxDoctor.sphinx.outputDir": {
+          "type": "string",
+          "default": ".tmp/sphinx-doctor/dirhtml",
+          "description": "Output directory for Sphinx build, relative to workspace folder."
+        },
+        "sphinxDoctor.sphinx.warningFile": {
+          "type": "string",
+          "default": ".tmp/sphinx-doctor/warnings.log",
+          "description": "Warning file path for sphinx-build -w flag, relative to workspace folder."
+        },
+        "sphinxDoctor.sphinx.extraArgs": {
+          "type": "array",
+          "default": [],
+          "description": "Additional arguments to pass to sphinx-build.",
+          "items": {
+            "type": "string"
+          }
         }
       }
     }

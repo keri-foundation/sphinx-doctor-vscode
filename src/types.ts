@@ -151,6 +151,13 @@ export interface ExtensionConfig {
   refreshAutoRunOnSave: boolean;
   refreshDebounceMs: number;
   logLevel: SphinxDoctorLogLevel;
+  directRunEnabled: boolean;
+  sphinxCommand: string;
+  sphinxBuilder: string;
+  sphinxSourceDir: string;
+  sphinxOutputDir: string;
+  sphinxWarningFile: string;
+  sphinxExtraArgs: string[];
 }
 
 export interface WatchModeSummary {
@@ -291,4 +298,14 @@ export function buildDiagnosticMessage(issue: DiagnosticsIssue): string {
     message += ' [confidence: low]';
   }
   return message;
+}
+
+export interface SphinxRunConfig {
+  enabled: boolean;
+  command: string;
+  builder: string;
+  sourceDir: string;
+  outputDir: string;
+  warningFile: string;
+  extraArgs: string[];
 }
