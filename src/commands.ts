@@ -41,7 +41,7 @@ import {
   runSphinxPlan,
   SphinxRunConfig,
 } from './runner/SphinxDoctorRunner';
-import { parseSphinxWarningsFromFile } from './parser/SphinxWarningParser';
+import { parseSphinxWarnings } from './parser/SphinxWarningParser';
 import { SphinxDoctorLogger } from './log';
 import { computeDiagnosticsAccounting, publishDiagnostics, PublishLogger } from './publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
@@ -636,6 +636,37 @@ function logProcessOutput(
 
   const lines = trimmed.split(/\r?\n/).slice(0, 5).join(' | ');
   logger.debug(`${label}: ${lines}`);
+}
+
+interface WarningFileSummary {
+  byteLength: number;
+  lineCount: number;
+  blankLineCount: number;
+  nonBlankLineCount: number;
+  docstringWarningCount: number;
+  standardWarningCount: number;
+  globalWarningCount: number;
+  firstTenLines: string;
+}
+
+function summarizeWarningFileContent(content: string): WarningFileSummary {
+  const lines = content.split(/\r?\n/);
+  const blankLineCount = lines.filter((line) => line.trim().length === 0).length;
+
+  return {
+    byteLength: Buffer.byteLength(content, 'utf8'),
+    lineCount: lines.length,
+    blankLineCount,
+    nonBlankLineCount: lines.length - blankLineCount,
+    docstringWarningCount: lines.filter((line) => line.includes('docstring of')).length,
+    standardWarningCount: lines.filter((line) => /^[^:]+:[0-9]+: (WARNING|ERROR|INFO):/.test(line)).length,
+    globalWarningCount: lines.filter((line) => /^(WARNING|ERROR|INFO):/.test(line)).length,
+    firstTenLines: lines.slice(0, 10).map((line) => line.trimEnd()).join(' | '),
+  };
+}
+
+function shouldTreatWarningFileAsEmpty(summary: WarningFileSummary): boolean {
+  return summary.byteLength === 0 || summary.nonBlankLineCount === 0;
 }
 
 function resolveProjectLatestDiagnosticsPath(
@@ -1350,29 +1381,51 @@ export function registerCommands(
             return;
           }
 
-          // Parse warnings if file exists
+          // Check if warning file exists and has content
           if (!result.warningFileExists) {
-            void vscode.window.showInformationMessage(
-              'Sphinx build completed successfully with no warnings.',
+            void vscode.window.showWarningMessage(
+              'Sphinx Doctor: Warning file was not created. Sphinx may have failed before generating it.',
             );
             return;
           }
 
+          const warningFileContent = await vscode.workspace.fs.readFile(vscode.Uri.file(plan.warningFile));
+          const warningText = Buffer.from(warningFileContent).toString('utf8');
+          const warningSummary = summarizeWarningFileContent(warningText);
+
           dependencies.logger.info(`Parsing warnings from: ${plan.warningFile}`);
 
-          const parseResult = await parseSphinxWarningsFromFile(
-            plan.warningFile,
-            workspaceFolderInfo.fsPath,
-            workspaceFolderInfo.name,
+          const parseResult = await parseSphinxWarnings({
+            warningFileContent: warningText,
+            repoRoot: workspaceFolderInfo.fsPath,
+            sourceWorkspaceFolder: workspaceFolderInfo.name,
+          });
+
+          dependencies.logger.info(
+            `Sphinx Doctor run context: selectedWorkspaceFolder=${workspaceFolderInfo.name}; cwd=${plan.cwd}; command=${plan.command}; args=${plan.args.join(' ')}; warningFile=${plan.warningFile}; exists=${result.warningFileExists}; bytes=${warningSummary.byteLength}; lines=${warningSummary.lineCount}; first10=${warningSummary.firstTenLines}; docstring=${warningSummary.docstringWarningCount}; standard=${warningSummary.standardWarningCount}; global=${warningSummary.globalWarningCount}; parserRawLines=${parseResult.totalLines}; parsed=${parseResult.issues.length}; unparsed=${parseResult.unparsedCount}; mapped=${parseResult.issues.length}; unmapped=${parseResult.unmappedCount}; publishable=${parseResult.issues.length}.`,
           );
 
           dependencies.logger.info(
-            `Parsed ${parseResult.issues.length} warnings (${parseResult.unmappedCount} unmapped) from ${parseResult.totalLines} lines`,
+            `Parsed ${parseResult.issues.length} issues from ${parseResult.totalLines} lines (${parseResult.unmappedCount} unmapped, ${parseResult.unparsedCount} unparsed)`,
           );
 
-          if (parseResult.issues.length === 0) {
+          if (shouldTreatWarningFileAsEmpty(warningSummary) && parseResult.issues.length === 0) {
             void vscode.window.showInformationMessage(
-              'Sphinx build completed with no parseable warnings.',
+              'Sphinx Doctor: Sphinx produced no warnings (empty or single blank line in warning file).',
+            );
+            return;
+          }
+
+          if (parseResult.issues.length === 0 && parseResult.unparsedCount > 0) {
+            void vscode.window.showWarningMessage(
+              `Sphinx Doctor: Warnings were present but none matched parser patterns (${parseResult.unparsedCount} unparsed lines).`,
+            );
+            return;
+          }
+
+          if (parseResult.issues.length === 0 && parseResult.unmappedCount > 0) {
+            void vscode.window.showWarningMessage(
+              `Sphinx Doctor: Warnings parsed but could not be mapped to files (${parseResult.unmappedCount} unmapped).`,
             );
             return;
           }

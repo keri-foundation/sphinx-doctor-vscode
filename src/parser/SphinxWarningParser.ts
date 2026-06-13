@@ -64,6 +64,10 @@ export interface ParseSphinxWarningsResult {
   unmappedCount: number;
   unparsedCount: number;
   totalLines: number;
+  blankLineCount: number;
+  docstringWarningCount: number;
+  standardWarningCount: number;
+  globalWarningCount: number;
 }
 
 /**
@@ -314,10 +318,14 @@ function createDiagnosticsIssue(
 }
 
 export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): Promise<ParseSphinxWarningsResult> {
-  const lines = options.warningFileContent.split('\n');
+  const lines = options.warningFileContent.split(/\r?\n/);
   const issues: DiagnosticsIssue[] = [];
   let unmappedCount = 0;
   let unparsedCount = 0;
+  const blankLineCount = lines.filter((line) => line.trim().length === 0).length;
+  const docstringWarningCount = lines.filter((line) => line.includes('docstring of')).length;
+  const standardWarningCount = lines.filter((line) => /^[^:]+:[0-9]+: (WARNING|ERROR|INFO):/.test(line)).length;
+  const globalWarningCount = lines.filter((line) => /^(WARNING|ERROR|INFO):/.test(line)).length;
 
   // First pass: parse all warnings and collect docstring warnings that need AST mapping
   const parsedWarnings: Array<{ parsed: ParsedSphinxWarning; index: number }> = [];
@@ -403,6 +411,10 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
     unmappedCount,
     unparsedCount,
     totalLines: lines.length,
+    blankLineCount,
+    docstringWarningCount,
+    standardWarningCount,
+    globalWarningCount,
   };
 }
 

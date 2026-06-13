@@ -98,6 +98,10 @@ test('parseSphinxWarnings handles empty content', async () => {
   assert.strictEqual(result.unmappedCount, 0);
   assert.strictEqual(result.unparsedCount, 1);
   assert.strictEqual(result.totalLines, 1);
+  assert.strictEqual(result.blankLineCount, 1);
+  assert.strictEqual(result.docstringWarningCount, 0);
+  assert.strictEqual(result.standardWarningCount, 0);
+  assert.strictEqual(result.globalWarningCount, 0);
 });
 
 test('parseSphinxWarnings handles content with only blank lines', async () => {
@@ -111,6 +115,10 @@ test('parseSphinxWarnings handles content with only blank lines', async () => {
   assert.strictEqual(result.unmappedCount, 0);
   assert.strictEqual(result.unparsedCount, 4);
   assert.strictEqual(result.totalLines, 4);
+  assert.strictEqual(result.blankLineCount, 4);
+  assert.strictEqual(result.docstringWarningCount, 0);
+  assert.strictEqual(result.standardWarningCount, 0);
+  assert.strictEqual(result.globalWarningCount, 0);
 });
 
 test('parseSphinxWarnings handles ERROR severity', async () => {
@@ -137,6 +145,33 @@ test('parseSphinxWarnings handles INFO severity', async () => {
   assert.strictEqual(result.unparsedCount, 0);
   assert.strictEqual(result.issues[0].severity, 'info');
   assert.strictEqual(result.issues[0].category, 'info');
+});
+
+test('parseSphinxWarnings parses real keripy docstring warning', async () => {
+  const content = '/workspace/project/libs/keripy/src/keri/app/habbing.py:docstring of keri.app.habbing.BaseHab.endorse:7: ERROR: Unexpected indentation. [docutils]';
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot: '/workspace/project/libs/keripy',
+    sourceWorkspaceFolder: 'keripy',
+  });
+
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.unmappedCount, 0);
+  assert.strictEqual(result.unparsedCount, 0);
+  assert.strictEqual(result.totalLines, 1);
+  assert.strictEqual(result.docstringWarningCount, 1);
+  assert.strictEqual(result.standardWarningCount, 0);
+  assert.strictEqual(result.globalWarningCount, 0);
+
+  const issue = result.issues[0];
+  assert.strictEqual(issue.severity, 'error');
+  assert.strictEqual(issue.category, 'docutils');
+  assert.strictEqual(issue.message, 'Unexpected indentation. (in keri.app.habbing.BaseHab.endorse)');
+  assert.strictEqual(issue.repoRelativePath, 'src/keri/app/habbing.py');
+  assert.strictEqual(issue.sourceRange?.startLine, 7);
+  assert.strictEqual(issue.sourceRange?.anchorKind, 'docstring-line');
+  // AST mapping fails in test environment, so it falls back to low confidence
+  assert.strictEqual(issue.mapping.confidence, 'low');
 });
 
 test('parseSphinxWarnings handles warning with colons in message', async () => {

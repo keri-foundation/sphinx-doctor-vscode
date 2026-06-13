@@ -18,8 +18,7 @@
     "workspaceContains:docs/conf.py",
     "workspaceContains:doc/conf.py",
     "workspaceContains:source/conf.py",
-    "workspaceContains:conf.py",
-    "onCommand:sphinxDoctor.runSphinxBuild"
+    "workspaceContains:conf.py"
   ],
   "categories": [
     "Other"
