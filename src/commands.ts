@@ -1402,12 +1402,18 @@ export function registerCommands(
           });
 
           dependencies.logger.info(
-            `Sphinx Doctor run context: selectedWorkspaceFolder=${workspaceFolderInfo.name}; cwd=${plan.cwd}; command=${plan.command}; args=${plan.args.join(' ')}; warningFile=${plan.warningFile}; exists=${result.warningFileExists}; bytes=${warningSummary.byteLength}; lines=${warningSummary.lineCount}; first10=${warningSummary.firstTenLines}; docstring=${warningSummary.docstringWarningCount}; standard=${warningSummary.standardWarningCount}; global=${warningSummary.globalWarningCount}; parserRawLines=${parseResult.totalLines}; parsed=${parseResult.issues.length}; unparsed=${parseResult.unparsedCount}; mapped=${parseResult.issues.length}; unmapped=${parseResult.unmappedCount}; publishable=${parseResult.issues.length}.`,
+            `Sphinx Doctor run context: selectedWorkspaceFolder=${workspaceFolderInfo.name}; cwd=${plan.cwd}; command=${plan.command}; args=${plan.args.join(' ')}; warningFile=${plan.warningFile}; exists=${result.warningFileExists}; bytes=${warningSummary.byteLength}; lines=${warningSummary.lineCount}; first10=${warningSummary.firstTenLines}; docstring=${warningSummary.docstringWarningCount}; standard=${warningSummary.standardWarningCount}; global=${warningSummary.globalWarningCount}; parserRawLines=${parseResult.totalLines}; parsed=${parseResult.issues.length}; unparsed=${parseResult.unparsedCount}; mapped=${parseResult.issues.length}; unmapped=${parseResult.unmappedCount}; publishable=${parseResult.issues.length}; astDegraded=${parseResult.astDegraded}.`,
           );
 
           dependencies.logger.info(
             `Parsed ${parseResult.issues.length} issues from ${parseResult.totalLines} lines (${parseResult.unmappedCount} unmapped, ${parseResult.unparsedCount} unparsed)`,
           );
+
+          if (parseResult.astDegraded) {
+            dependencies.logger.warn(
+              'Tree-sitter docstring mapping unavailable; continuing with fallback file/line diagnostics (mapping confidence may be reduced).',
+            );
+          }
 
           if (shouldTreatWarningFileAsEmpty(warningSummary) && parseResult.issues.length === 0) {
             void vscode.window.showInformationMessage(
@@ -1476,13 +1482,27 @@ export function registerCommands(
               diagnosticMode: config.diagnosticsMode,
               defaultSourceWorkspaceFolder: workspaceFolderInfo.name,
               defaultRepoRoot: '.',
+              applyDiagnosticModeFilter: false,
               logger: dependencies.logger,
             },
           );
 
           dependencies.logger.info(
-            `Published ${publishResult.publishedDiagnostics} diagnostics from Sphinx build`,
+            `Direct-run diagnostics published for ${workspaceFolderInfo.name}: ${publishResult.issueCount} issues, ${publishResult.publishableBeforeFilter} publishable before filter, ${publishResult.publishedDiagnostics} published across ${publishResult.targetUriCount} target URIs; ${publishResult.filteredByMode} filtered by mode, ${publishResult.skippedIssues} skipped, ${publishResult.resolutionFailures} resolution failures. Warning file: ${plan.warningFile}.`,
           );
+
+          const statusMessage =
+            `Sphinx Doctor direct run: ${publishResult.issueCount} issues; ${publishResult.publishedDiagnostics} published in ${config.diagnosticsMode} mode.`;
+          dependencies.watchMode?.noteManualDiagnosticsPublished({
+            filePath: plan.warningFile,
+            issueCount: publishResult.issueCount,
+            publishableBeforeFilter: publishResult.publishableBeforeFilter,
+            publishedDiagnostics: publishResult.publishedDiagnostics,
+            filteredByMode: publishResult.filteredByMode,
+            skippedIssues: publishResult.skippedIssues,
+            resolutionFailures: publishResult.resolutionFailures,
+            message: statusMessage,
+          });
 
           void vscode.window.showInformationMessage(
             `Sphinx Doctor: Published ${publishResult.publishedDiagnostics} diagnostics from Sphinx build (${parseResult.unmappedCount} unmapped warnings).`,

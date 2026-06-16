@@ -34,10 +34,11 @@ Use `Run Sphinx Doctor Extension Host (Multi-Root Fixture Example)` only when yo
 
 ## Installed VSIX
 
-1. Run `npm run package`.
-2. Run `npm run install:local`, or install the generated `.vsix` from VS Code.
-3. Reload the target VS Code window.
-4. Run `Sphinx Doctor: Troubleshoot Environment` and confirm `Production` mode.
+1. Run `npm run reinstall:local` (compiles, tests, packages, force-installs, and verifies markers).
+2. Reload the target VS Code window.
+3. Run `Sphinx Doctor: Troubleshoot Environment` and confirm `Production` mode.
+
+For manual control: `npm run package` then `npm run install:local`, or install the generated `.vsix` from VS Code.
 
 ## Fixtures
 

@@ -200,6 +200,39 @@ If a normal reinstall still looks stale, use a conservative uninstall and reinst
 
 Do not delete extension folders manually.
 
+### Deterministic Local VSIX Reinstall
+
+Use this when source changes have been compiled but the normal KERI or multi-root workspace still runs stale extension behavior. This is the most common cause of "tests pass but VS Code still shows old behavior."
+
+**Critical fact:** Source edits in `libs/sphinx-doctor-vscode` do **not** affect the normal KERI workspace until the extension is packaged, installed, and the target window is reloaded. The normal workspace runs the installed Production VSIX, not the source checkout.
+
+1. From `libs/sphinx-doctor-vscode`, run:
+```
+npm run reinstall:local
+```
+2. This single command compiles, runs tests, packages a fresh VSIX, force-installs it, and performs a best-effort marker verification.
+3. Reload the target VS Code window:
+```
+Developer: Reload Window
+```
+4. Run `Sphinx Doctor: Troubleshoot Environment`.
+5. Confirm `Production` mode and the installed extension path.
+
+**Stale runtime symptoms:**
+- Live Sphinx args missing `-E` after the source has it
+- Tree-sitter initialization remaining fatal after fallback was implemented
+- `Direct-run diagnostics published` log not appearing
+- Status bar staying at `no diagnostics` after a successful direct run
+
+**Verification after reinstall:**
+- `Sphinx Doctor: Troubleshoot Environment` shows Production mode
+- `Sphinx Doctor: Run Sphinx Build` args include `-E`
+- `Direct-run diagnostics published` appears in Sphinx Doctor output
+- Problems populate with Sphinx Doctor diagnostics
+- Status bar shows issue count, not `no diagnostics`
+
+If `code` CLI is unavailable, set `CODE_CLI=/path/to/code` before running the script, or use `Extensions: Install from VSIX` manually and reload.
+
 The repo-local contributor workflow in [CONTRIBUTING.md](CONTRIBUTING.md) summarizes these lanes for public contributors.
 
 ### Smoke-Test Checklist

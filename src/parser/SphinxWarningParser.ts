@@ -68,6 +68,7 @@ export interface ParseSphinxWarningsResult {
   docstringWarningCount: number;
   standardWarningCount: number;
   globalWarningCount: number;
+  astDegraded: boolean;
 }
 
 /**
@@ -367,6 +368,7 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
 
   // Batch map all docstring warnings using Tree-sitter
   let astResults: DocstringLocationResult[] = [];
+  let astDegraded = false;
   if (docstringMappings.length > 0) {
     const locator = new TreeSitterDocstringLocator();
     try {
@@ -376,6 +378,9 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
         docstringLine: m.docstringLine,
       }));
       astResults = await locator.locateBatch(requests);
+    } catch {
+      astResults = [];
+      astDegraded = true;
     } finally {
       locator.dispose();
     }
@@ -415,6 +420,7 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
     docstringWarningCount,
     standardWarningCount,
     globalWarningCount,
+    astDegraded,
   };
 }
 

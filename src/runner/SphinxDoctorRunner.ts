@@ -99,6 +99,7 @@ export function buildSphinxRunPlan(options: BuildSphinxRunPlanOptions): SphinxRu
   const args = [
     '-b',
     options.config.builder,
+    '-E',
     sourceDir,
     outputDir,
     '-w',

@@ -37,6 +37,7 @@ export interface PublishOptions {
   defaultRepoRoot?: string;
   fixtureSourceRoot?: string;
   allowFirstFolderFallback?: boolean;
+  applyDiagnosticModeFilter?: boolean;
   logger: PublishLogger;
 }
 
@@ -123,7 +124,7 @@ function collectDiagnostics(
 
     publishableBeforeFilter += 1;
 
-    if (!issueMatchesDiagnosticMode(issue, options.diagnosticMode)) {
+    if (!issueMatchesDiagnosticMode(issue, options.diagnosticMode) && options.applyDiagnosticModeFilter !== false) {
       skippedIssues += 1;
       filteredByMode += 1;
       continue;

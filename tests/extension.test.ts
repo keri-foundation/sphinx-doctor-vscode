@@ -13,6 +13,9 @@ import {
   formatRefreshScopeDriftWarning,
   getEnrichmentPermission,
 } from '../src/enrichmentRunner';
+import { buildSphinxRunPlan } from '../src/runner/SphinxDoctorRunner';
+import { parseSphinxWarnings } from '../src/parser/SphinxWarningParser';
+import { TreeSitterDocstringLocator } from '../src/parser/TreeSitterDocstringLocator';
 import {
   applyRefreshScopeToConfig,
   buildRefreshCategoryArgs,
@@ -44,6 +47,14 @@ import {
   toZeroBasedPosition,
 } from '../src/types';
 import type { PublishResult } from '../src/publishDiagnostics';
+
+const NOOP_PUBLISH_LOGGER = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
+
 import {
   buildProjectQuickPickItems,
   coerceRefreshDebounceMs,
@@ -2473,6 +2484,25 @@ test('createSingleFlightController blocks overlapping project refreshes', () => 
   assert.equal(controller.tryStart('keripy'), true);
 });
 
+test('buildWatchModeSummary returns watching state for direct-run diagnostics with no watchers', () => {
+  const summary = buildWatchModeSummary({
+    projectCount: 1,
+    loadedProjectCount: 1,
+    issueCount: 623,
+    publishableBeforeFilter: 623,
+    publishedDiagnostics: 623,
+    watcherCount: 0,
+    rawPendingCount: 0,
+    errorCount: 0,
+    diagnosticMode: 'layout',
+  });
+
+  assert.equal(summary.state, 'watching');
+  assert.equal(summary.issueCount, 623);
+  assert.equal(summary.publishedDiagnostics, 623);
+  assert.equal(formatWatchModeText(summary), 'Sphinx Doctor: 623 issues');
+});
+
 test('formatWatchModeText shows issue counts for active diagnostics', () => {
   const summary = buildWatchModeSummary({
     projectCount: 2,
@@ -2528,4 +2558,79 @@ test('canAutoRunEnrichment blocks watch-mode enrichment when workspace is untrus
 test('hasOpenWorkspaceFolders reports a safe no-op when no folders are open', () => {
   assert.equal(hasOpenWorkspaceFolders([]), false);
   assert.equal(hasOpenWorkspaceFolders([{ name: '02-keripy', fsPath: '/workspace/keripy' }]), true);
+});
+
+test('buildSphinxRunPlan includes -E for fresh environment', () => {
+  const plan = buildSphinxRunPlan({
+    config: {
+      enabled: true,
+      command: 'sphinx-build',
+      builder: 'dirhtml',
+      sourceDir: 'docs',
+      outputDir: '.tmp/sphinx-doctor/dirhtml',
+      warningFile: '.tmp/sphinx-doctor/warnings.log',
+      extraArgs: [],
+    },
+    workspaceFolders: [{ name: 'test-workspace', fsPath: '/tmp/test-project' }],
+    cwdWorkspaceFolder: 'test-workspace',
+  });
+
+  assert.ok(plan.args.includes('-E'), 'args should include -E for fresh Sphinx environment');
+  assert.equal(plan.args[plan.args.indexOf('-E') + 1], plan.sourceDir, '-E should be followed by sourceDir');
+});
+
+test('parseSphinxWarnings returns issues even when Tree-sitter docstring mapping fails', async () => {
+  const originalLocateBatch = TreeSitterDocstringLocator.prototype.locateBatch;
+  TreeSitterDocstringLocator.prototype.locateBatch = async () => {
+    throw new Error('Failed to initialize Tree-sitter Python parser');
+  };
+
+  try {
+    const sphinxLogLines = [
+      '/repo/src/keri/core/eventing.py:docstring of keri.core.eventing.kevery:7: ERROR: Unexpected indentation. [docutils]',
+      '/repo/src/keri/core/eventing.py:42: WARNING: Block quote ends without a blank line [docutils]',
+      'WARNING: Some global warning [docutils]',
+      '',
+    ];
+
+    const result = await parseSphinxWarnings({
+      warningFileContent: sphinxLogLines.join('\n'),
+      repoRoot: '/repo',
+      sourceWorkspaceFolder: 'test-workspace',
+    });
+
+    assert.ok(result.issues.length > 0, 'should have issues even when Tree-sitter fails');
+    assert.equal(result.astDegraded, true, 'astDegraded should be true when Tree-sitter fails');
+    assert.equal(result.unparsedCount, 1, 'blank trailing line counts as unparsed');
+    assert.equal(result.unmappedCount, 1, 'global warning should be unmapped');
+
+    // Check the docstring warning is still present as a fallback diagnostic
+    const docstringIssue = result.issues.find((issue) => issue.repoRelativePath?.includes('eventing.py') && issue.category === 'docutils');
+    assert.ok(docstringIssue, 'docstring warning should still be an issue despite Tree-sitter failure');
+    assert.equal(docstringIssue!.mapping.confidence, 'medium', 'fallback should have medium confidence');
+    assert.ok(docstringIssue!.sourceRange, 'should have a source range from docstring-relative line');
+  } finally {
+    TreeSitterDocstringLocator.prototype.locateBatch = originalLocateBatch;
+  }
+});
+
+test('direct-run diagnostics would be filtered by layout mode without override', () => {
+  // Direct-run issues have category 'docutils', which layout mode does not pass.
+  // The fix: applyDiagnosticModeFilter=false in publishDiagnostics bypasses this.
+  const docutilsShape = {
+    category: 'docutils',
+    code: 'docutils',
+    message: 'Unexpected indentation. [docutils]',
+  };
+
+  assert.equal(issueMatchesDiagnosticMode(docutilsShape, 'layout'), false,
+    'docutils category should NOT pass layout — direct-run was 0-published because of this');
+  assert.equal(issueMatchesDiagnosticMode(docutilsShape, 'full'), true,
+    'docutils should pass full mode');
+  assert.equal(issueMatchesDiagnosticMode(docutilsShape, 'reference'), false,
+    'docutils should not pass reference mode');
+
+  // Verify that the 'unexpected-indentation' category (from artifact/enriched diagnostics) DOES pass layout
+  assert.equal(issueMatchesDiagnosticMode({ category: 'unexpected-indentation', code: 'docutils.unexpected-indentation', message: 'Unexpected indentation.' }, 'layout'), true,
+    'unexpected-indentation should pass layout — this is the existing artifact behavior we preserve');
 });

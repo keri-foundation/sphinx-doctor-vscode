@@ -32,6 +32,19 @@ Preserve these three lanes and do not collapse them into one generic "test the e
 - `Sphinx Doctor: Troubleshoot Environment` is the mode and path source of truth.
 - After `package.json` command contribution changes, restart the Extension Development Host or reinstall the VSIX. Do not assume a normal reload picked up the manifest change.
 - Keep repo-local helpers thin. Prefer the existing npm scripts, `.vscode/tasks.json`, `.vscode/launch.json`, and `.vscode-test.mjs` over bespoke wrapper logic.
+
+## Runtime Verification Rule (HARD)
+
+**Before claiming a VS Code extension behavior is fixed, verify the active runtime lane.**
+
+- Development Host verification requires `Troubleshoot Environment` showing **Development** mode and a source checkout path (e.g., `libs/sphinx-doctor-vscode`).
+- Production verification requires reinstalling the local VSIX with `npm run reinstall:local`, reloading the target window, and then `Troubleshoot Environment` showing **Production** mode.
+- Do not claim Problems or status bar behavior is fixed from unit tests or compiled JS grep alone.
+- Live Sphinx output must show the expected command args and publish/status logs.
+- If the normal KERI workspace is using Production mode, source edits alone are irrelevant until VSIX reinstall + reload.
+- A stale runtime symptom is live Sphinx args missing `-E` after source has it.
+- Another stale runtime symptom is fatal Tree-sitter initialization after fallback was implemented.
+
 - If a task is explicitly docs, instructions, or workflow-only, keep runtime TypeScript behavior unchanged unless the user asks for runtime changes.
 - Do not add real Sphinx execution to the first extension-host test slice unless the user asks for it. Start with bounded host-behavior checks.
 - Do not assume `Devtools/sphinx-doctor/README.md` exists when this repo is opened standalone.
