@@ -296,7 +296,7 @@ test('selectInventoryCandidate reports ambiguity instead of silently guessing', 
 });
 
 test('parseSphinxWarnings returns issues even when docstring text mapper cannot read source', async () => {
-  // TextDocstringLocator replaces WASM Tree-sitter. When source files are not
+  // TextPythonDocstringSourceMapper replaces WASM Tree-sitter. When source files are not
   // accessible (e.g. test paths), docstring warnings get low confidence and
   // are retained but not published to Problems.
 
@@ -444,7 +444,7 @@ test('direct-run parser suppresses .rst/.md/docs warnings and publishes only Pyt
     'should count 3 suppressed non-docstring issues (.rst, .md, located)');
 });
 
-test('TextDocstringLocator maps class method docstring to source range', async () => {
+test('TextPythonDocstringSourceMapper maps class method docstring to source range', async () => {
   // Write a temp Python file with a class containing a docstring method
   const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'sphinx-doctor-textmapper-'));
   const pyPath = path.join(tmpDir, 'habbing.py');

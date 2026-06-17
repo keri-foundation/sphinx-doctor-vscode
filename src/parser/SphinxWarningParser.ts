@@ -6,8 +6,8 @@ import {
   DiagnosticsMapping,
   DiagnosticsSourceRange,
 } from '../types';
-import { TextDocstringLocator } from './TextDocstringLocator';
-import { DocstringLocationRequest, DocstringLocationResult } from './DocstringLocator';
+import { TextPythonDocstringSourceMapper } from '../docstrings/TextPythonDocstringSourceMapper';
+import { PythonDocstringSourceMapRequest, PythonDocstringSourceMapResult } from '../docstrings/PythonDocstringSourceMapper';
 
 /**
  * Discriminated union representing parsed Sphinx warning variants.
@@ -182,7 +182,7 @@ function createDiagnosticsIssue(
   repoRoot: string,
   sourceWorkspaceFolder?: string,
   index?: number,
-  astMapping?: DocstringLocationResult,
+  astMapping?: PythonDocstringSourceMapResult,
 ): DiagnosticsIssue | null {
   switch (warning.kind) {
     case 'located': {
@@ -383,12 +383,12 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
   }
 
   // Batch map all docstring warnings using conservative text scanner (no WASM)
-  let astResults: DocstringLocationResult[] = [];
+  let astResults: PythonDocstringSourceMapResult[] = [];
   let astDegraded = false;
   if (docstringMappings.length > 0) {
-    const locator = new TextDocstringLocator();
+    const locator = new TextPythonDocstringSourceMapper();
     try {
-      const requests: DocstringLocationRequest[] = docstringMappings.map((m) => ({
+      const requests: PythonDocstringSourceMapRequest[] = docstringMappings.map((m) => ({
         filePath: m.filePath,
         objectPath: m.objectPath,
         docstringLine: m.docstringLine,
@@ -403,7 +403,7 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
   }
 
   // Create a map from original index to AST mapping result
-  const astMappingMap = new Map<number, DocstringLocationResult>();
+  const astMappingMap = new Map<number, PythonDocstringSourceMapResult>();
   for (let i = 0; i < docstringMappings.length; i++) {
     astMappingMap.set(docstringMappings[i].index, astResults[i]);
   }

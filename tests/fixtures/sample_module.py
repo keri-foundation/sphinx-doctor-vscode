@@ -1,4 +1,4 @@
-"""Sample module for TextDocstringLocator safe-mapping tests."""
+"""Sample module for TextPythonDocstringSourceMapper safe-mapping tests."""
 
 
 class Calculator:

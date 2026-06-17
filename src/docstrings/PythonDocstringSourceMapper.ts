@@ -4,7 +4,7 @@
  * to be used interchangeably.
  */
 
-export interface DocstringLocationRequest {
+export interface PythonDocstringSourceMapRequest {
   /** Absolute path to the Python source file */
   filePath: string;
   /** Dotted object path (e.g., "keri.app.habbing.BaseHab.endorse") */
@@ -13,7 +13,7 @@ export interface DocstringLocationRequest {
   docstringLine: number;
 }
 
-export interface DocstringLocationResult {
+export interface PythonDocstringSourceMapResult {
   /** Absolute line number in source file (1-indexed) */
   targetLine?: number;
   /** Docstring start line (1-indexed) */
@@ -30,17 +30,17 @@ export interface DocstringLocationResult {
   matchedObject?: string;
 }
 
-export interface DocstringLocator {
+export interface PythonDocstringSourceMapper {
   /**
-   * Locate a single docstring and map a relative line to an absolute line.
+   * Map a single docstring-relative line to an absolute source line.
    */
-  locate(request: DocstringLocationRequest): Promise<DocstringLocationResult>;
+  locate(request: PythonDocstringSourceMapRequest): Promise<PythonDocstringSourceMapResult>;
 
   /**
-   * Locate multiple docstrings in batch.
+   * Map multiple docstrings in batch.
    * Implementations should optimize by parsing each file only once.
    */
-  locateBatch(requests: DocstringLocationRequest[]): Promise<DocstringLocationResult[]>;
+  locateBatch(requests: PythonDocstringSourceMapRequest[]): Promise<PythonDocstringSourceMapResult[]>;
 
   /**
    * Clean up resources (e.g., WASM memory, parser instances).

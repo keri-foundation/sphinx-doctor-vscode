@@ -1,10 +1,10 @@
 import * as fs from 'node:fs/promises';
 
 import {
-  DocstringLocationRequest,
-  DocstringLocationResult,
-  DocstringLocator,
-} from './DocstringLocator';
+  PythonDocstringSourceMapRequest,
+  PythonDocstringSourceMapResult,
+  PythonDocstringSourceMapper,
+} from './PythonDocstringSourceMapper';
 
 // ---- Internal types ----
 
@@ -34,21 +34,21 @@ interface DocstringBlock {
  * - Returns no result for ambiguous cases.
  * - Prefers fewer correct diagnostics over many wrong diagnostics.
  */
-export class TextDocstringLocator implements DocstringLocator {
-  async locate(request: DocstringLocationRequest): Promise<DocstringLocationResult> {
+export class TextPythonDocstringSourceMapper implements PythonDocstringSourceMapper {
+  async locate(request: PythonDocstringSourceMapRequest): Promise<PythonDocstringSourceMapResult> {
     const results = await this.locateBatch([request]);
     return results[0];
   }
 
-  async locateBatch(requests: DocstringLocationRequest[]): Promise<DocstringLocationResult[]> {
-    const byFile = new Map<string, DocstringLocationRequest[]>();
+  async locateBatch(requests: PythonDocstringSourceMapRequest[]): Promise<PythonDocstringSourceMapResult[]> {
+    const byFile = new Map<string, PythonDocstringSourceMapRequest[]>();
     for (const req of requests) {
       const existing = byFile.get(req.filePath) || [];
       existing.push(req);
       byFile.set(req.filePath, existing);
     }
 
-    const results: DocstringLocationResult[] = [];
+    const results: PythonDocstringSourceMapResult[] = [];
 
     for (const [filePath, fileRequests] of byFile) {
       let lines: string[];
@@ -72,7 +72,7 @@ export class TextDocstringLocator implements DocstringLocator {
 
   // ---- Core logic ----
 
-  private locateInSource(request: DocstringLocationRequest, lines: string[]): DocstringLocationResult {
+  private locateInSource(request: PythonDocstringSourceMapRequest, lines: string[]): PythonDocstringSourceMapResult {
     const objectPath = request.objectPath;
     const docstringLine = request.docstringLine;
 
@@ -135,7 +135,7 @@ export class TextDocstringLocator implements DocstringLocator {
     };
   }
 
-  private lowConfidence(request: DocstringLocationRequest, reason: string): DocstringLocationResult {
+  private lowConfidence(request: PythonDocstringSourceMapRequest, reason: string): PythonDocstringSourceMapResult {
     return {
       targetLine: request.docstringLine,
       confidence: 'low',
