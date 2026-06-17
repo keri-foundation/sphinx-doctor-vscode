@@ -9,7 +9,7 @@ import {
   formatRefreshScopeDriftWarning,
   getEnrichmentPermission,
   runEnrichmentPlan,
-} from './enrichmentRunner';
+} from './enrichment/enrichmentRunner';
 import {
   buildRefreshRunPlan,
   filterRecentInventoryCandidates,
@@ -17,7 +17,7 @@ import {
   inferRefreshScopeFromContract,
   inferProjectRefreshConfig,
   runRefreshPlan,
-} from './refreshRunner';
+} from './refresh/refreshRunner';
 import {
   inspectDiagnosticsFile,
   inspectDiagnosticsFileBinding,

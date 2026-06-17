@@ -5,7 +5,7 @@ import {
   buildEnrichmentRunPlan,
   buildRunId,
   getEnrichmentPermission,
-} from '../src/enrichmentRunner';
+} from '../src/enrichment/enrichmentRunner';
 
 import type { ConfiguredProject } from '../src/types';
 

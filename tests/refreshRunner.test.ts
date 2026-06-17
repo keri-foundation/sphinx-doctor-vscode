@@ -9,7 +9,7 @@ import {
   detectRefreshScopeDrift,
   evaluateRefreshBaselinePromotion,
   formatRefreshScopeDriftWarning,
-} from '../src/enrichmentRunner';
+} from '../src/enrichment/enrichmentRunner';
 
 import {
   applyRefreshScopeToConfig,
@@ -19,7 +19,7 @@ import {
   getRefreshPermission,
   inferProjectRefreshConfig,
   inferRefreshScopeFromContract,
-} from '../src/refreshRunner';
+} from '../src/refresh/refreshRunner';
 
 import type { ConfiguredProject, DiagnosticsContract, DiagnosticsIssue } from '../src/types';
 

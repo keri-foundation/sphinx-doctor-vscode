@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-import { getEnrichmentPermission } from './enrichmentRunner';
+import { getEnrichmentPermission } from './enrichment/enrichmentRunner';
 import {
   ConfiguredProject,
   DiagnosticMode,

@@ -26,7 +26,7 @@ import {
   formatRefreshScopeDriftWarning,
   getEnrichmentPermission,
   runEnrichmentPlan,
-} from './enrichmentRunner';
+} from './enrichment/enrichmentRunner';
 import {
   buildRefreshRunPlan,
   inferRefreshScopeFromContract,
@@ -34,7 +34,7 @@ import {
   getRefreshPermission,
   inferProjectRefreshConfig,
   runRefreshPlan,
-} from './refreshRunner';
+} from './refresh/refreshRunner';
 import {
   buildSphinxRunPlan,
   getSphinxRunPermission,
