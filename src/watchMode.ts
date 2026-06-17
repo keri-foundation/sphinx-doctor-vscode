@@ -58,7 +58,7 @@ import {
   ProjectPublicationSnapshot,
   runWatchModeStartup,
   summarizeProjectPublicationSnapshots,
-} from './watchModeState';
+} from './watch/watchModeState';
 
 const NOOP_PUBLISH_LOGGER = {
   debug: () => {},

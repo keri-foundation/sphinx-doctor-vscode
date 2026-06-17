@@ -15,7 +15,7 @@ import {
   isRelevantRefreshSavePath,
   runWatchModeStartup,
   summarizeProjectPublicationSnapshots,
-} from '../src/watchModeState';
+} from '../src/watch/watchModeState';
 
 import { resolveProjectSourceRoot } from '../src/workspace/inventoryCandidates';
 import type { ConfiguredProject } from '../src/types';

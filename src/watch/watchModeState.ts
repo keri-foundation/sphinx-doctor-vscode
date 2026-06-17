@@ -1,14 +1,14 @@
 import path from 'node:path';
 
-import { getEnrichmentPermission } from './enrichment/enrichmentRunner';
+import { getEnrichmentPermission } from '../enrichment/enrichmentRunner';
 import {
   ConfiguredProject,
   DiagnosticMode,
   ExtensionConfig,
   WatchModeSummary,
   WorkspaceFolderInfo,
-} from './types';
-import { resolveProjectSourceRoot } from './workspace/inventoryCandidates';
+} from '../types';
+import { resolveProjectSourceRoot } from '../workspace/inventoryCandidates';
 
 export interface DebounceScheduler {
   setTimeout(callback: () => void, delayMs: number): unknown;
