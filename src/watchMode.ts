@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import * as vscode from 'vscode';
 
-import { getExtensionConfig, projectLabel } from './config';
+import { getExtensionConfig, projectLabel } from './config/extensionConfig';
 import {
   buildEnrichmentRunPlan,
   evaluateRefreshBaselinePromotion,
@@ -24,7 +24,7 @@ import {
   isDiagnosticsBindingCompatible,
   loadDiagnosticsFromPath,
 } from './diagnostics/loadDiagnostics';
-import { SphinxDoctorLogger } from './log';
+import { SphinxDoctorLogger } from './logging/extensionLogger';
 import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
 import {
   computeDiagnosticsAccounting,

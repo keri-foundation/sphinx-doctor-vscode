@@ -7,7 +7,7 @@ import {
   getExtensionConfig,
   projectLabel,
   projectSelectionMode,
-} from './config';
+} from './config/extensionConfig';
 import {
   DiagnosticsFileKind,
   inspectDiagnosticsFileBinding,
@@ -42,7 +42,7 @@ import {
   SphinxRunConfig,
 } from './sphinx/SphinxDoctorRunner';
 import { parseSphinxWarnings } from './sphinx/SphinxWarningParser';
-import { SphinxDoctorLogger } from './log';
+import { SphinxDoctorLogger } from './logging/extensionLogger';
 import { computeDiagnosticsAccounting, publishDiagnostics, PublishLogger } from './publication/publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, mergeProjects } from './workspace/projectDiscovery';
 import {

@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 
 import { registerCommands } from './commands';
-import { getExtensionConfig } from './config';
-import { createLogger } from './log';
+import { getExtensionConfig } from './config/extensionConfig';
+import { createLogger } from './logging/extensionLogger';
 import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
 import { SphinxDoctorWatchMode } from './watchMode';
 

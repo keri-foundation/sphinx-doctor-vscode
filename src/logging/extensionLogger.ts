@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { SphinxDoctorLogLevel } from './types';
+import { SphinxDoctorLogLevel } from '../types';
 
 const LOG_LEVEL_ORDER: Record<SphinxDoctorLogLevel, number> = {
   debug: 10,

@@ -6,7 +6,7 @@ import {
   coerceRefreshDebounceMs,
   coerceProjects,
   projectSelectionMode,
-} from '../src/config';
+} from '../src/config/extensionConfig';
 import { ConfiguredProject, ProjectRefreshConfig } from '../src/types';
 
 const configuredProject: ConfiguredProject = {

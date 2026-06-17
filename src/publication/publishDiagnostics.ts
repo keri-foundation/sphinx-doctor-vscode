@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { SphinxDoctorLogger } from '../log';
+import { SphinxDoctorLogger } from '../logging/extensionLogger';
 import {
   buildDiagnosticMessage,
   DiagnosticMode,

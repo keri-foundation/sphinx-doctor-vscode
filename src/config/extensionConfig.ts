@@ -7,14 +7,14 @@ import {
   DEFAULT_REFRESH_DEBOUNCE_MS,
   DEFAULT_WATCH_DEBOUNCE_MS,
   MIN_REFRESH_DEBOUNCE_MS,
-} from './constants/config';
+} from '../constants/config';
 import {
   ConfiguredProject,
   ExtensionConfig,
   normalizeDiagnosticMode,
   ProjectRefreshConfig,
   SphinxDoctorLogLevel,
-} from './types';
+} from '../types';
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {

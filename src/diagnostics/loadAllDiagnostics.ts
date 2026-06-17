@@ -1,4 +1,4 @@
-import type { SphinxDoctorLogger } from '../log';
+import type { SphinxDoctorLogger } from '../logging/extensionLogger';
 
 export interface LoadAllDiagnosticsSnapshot {
   discoveredProjectCount: number;
