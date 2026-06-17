@@ -12,7 +12,6 @@ const COMMAND_IDS = [
   'sphinxDoctor.showStatus',
   'sphinxDoctor.troubleshootEnvironment',
 ];
-const TROUBLESHOOT_HEADING = '# Sphinx Doctor Troubleshoot Environment';
 const SELF_TEST_MESSAGE = '[self-test] Sphinx Doctor diagnostic publishing is working.';
 const FIXTURE_DIAGNOSTIC_MESSAGE = '[unexpected-indentation] Fixture docstring indentation issue. (greet)';
 

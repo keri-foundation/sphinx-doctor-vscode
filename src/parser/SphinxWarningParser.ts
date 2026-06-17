@@ -6,7 +6,7 @@ import {
   DiagnosticsMapping,
   DiagnosticsSourceRange,
 } from '../types';
-import { TreeSitterDocstringLocator } from './TreeSitterDocstringLocator';
+import { TextDocstringLocator } from './TextDocstringLocator';
 import { DocstringLocationRequest, DocstringLocationResult } from './DocstringLocator';
 
 /**
@@ -69,6 +69,10 @@ export interface ParseSphinxWarningsResult {
   standardWarningCount: number;
   globalWarningCount: number;
   astDegraded: boolean;
+  /** Count of docstring warnings retained because AST mapping was unavailable (docstring-relative line is unreliable). */
+  unsafeDocstringFallbackCount: number;
+  /** Count of non-docstring warnings suppressed from direct-run Problems (e.g. .rst/.md docs warnings). */
+  suppressedNonDocstringCount: number;
 }
 
 /**
@@ -198,7 +202,7 @@ function createDiagnosticsIssue(
       const mapping: DiagnosticsMapping = {
         confidence: 'high',
         strategy: 'sphinx-warning-file',
-        reason: 'Parsed from sphinx-build -w output',
+        reason: 'Parsed from sphinx-build -w output; suppressed from direct-run Problems (not a Python docstring warning)',
         objectResolved: false,
         lineResolved: true,
       };
@@ -217,7 +221,10 @@ function createDiagnosticsIssue(
         rawLocation: warning.filePath,
         sourceRange,
         mapping,
-        publishDiagnostic: true,
+        // Direct-run Problems scope: only publish Python docstring diagnostics.
+        // Standard file:line warnings (e.g. .rst/.md docs warnings) are retained
+        // for accounting but not published to Problems.
+        publishDiagnostic: false,
         related: [],
         sourceWorkspaceFolder,
       };
@@ -229,18 +236,22 @@ function createDiagnosticsIssue(
         return null;
       }
 
-      // Use AST mapping if available, otherwise fall back to docstring-relative line
-      const absoluteLine = astMapping?.targetLine ?? warning.docstringLine;
+      // Only publish when AST/Tree-sitter provides a high-confidence absolute source line.
+      // Docstring-relative line numbers (e.g., :7: inside the docstring text) are not
+      // valid source file positions and produce misleading Problem markers.
+      const hasSafeMapping = astMapping?.confidence === 'high' && astMapping.targetLine !== undefined;
+      const absoluteLine = hasSafeMapping ? astMapping!.targetLine! : warning.docstringLine;
       const confidence = astMapping?.confidence ?? 'medium';
-      const reason = astMapping?.reason ?? `Docstring warning for ${warning.objectPath} at line ${warning.docstringLine} (no AST mapping available)`;
-      const lineResolved = astMapping?.confidence === 'high';
+      const reason = astMapping?.reason
+        ?? `Docstring warning for ${warning.objectPath} at docstring line ${warning.docstringLine} (no AST mapping available — not published to Problems)`;
+      const lineResolved = hasSafeMapping;
 
       const sourceRange: DiagnosticsSourceRange = {
         startLine: absoluteLine,
         startColumn: 0,
         endLine: absoluteLine,
         endColumn: 0,
-        anchorKind: 'docstring-line',
+        anchorKind: hasSafeMapping ? 'docstring-line' : 'docstring-line-fallback',
       };
 
       const mapping: DiagnosticsMapping = {
@@ -265,7 +276,9 @@ function createDiagnosticsIssue(
         rawLocation: `${warning.filePath}:docstring of ${warning.objectPath}:${warning.docstringLine}`,
         sourceRange,
         mapping,
-        publishDiagnostic: true,
+        // Only publish when we have a high-confidence AST-mapped source line.
+        // Fallback docstring-relative lines would misplace Problem markers on arbitrary code.
+        publishDiagnostic: hasSafeMapping,
         related: [],
         sourceWorkspaceFolder,
       };
@@ -280,7 +293,7 @@ function createDiagnosticsIssue(
       const mapping: DiagnosticsMapping = {
         confidence: 'medium',
         strategy: 'sphinx-warning-file',
-        reason: 'Parsed from sphinx-build -w output (no line number)',
+        reason: 'Parsed from sphinx-build -w output (no line number); suppressed from direct-run Problems (not a Python docstring warning)',
         objectResolved: false,
         lineResolved: false,
       };
@@ -299,7 +312,10 @@ function createDiagnosticsIssue(
         rawLocation: warning.filePath,
         sourceRange: null,
         mapping,
-        publishDiagnostic: true,
+        // Direct-run Problems scope: only publish Python docstring diagnostics.
+        // File-only warnings without line numbers are retained for accounting
+        // but not published to Problems.
+        publishDiagnostic: false,
         related: [],
         sourceWorkspaceFolder,
       };
@@ -366,11 +382,11 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
     }
   }
 
-  // Batch map all docstring warnings using Tree-sitter
+  // Batch map all docstring warnings using conservative text scanner (no WASM)
   let astResults: DocstringLocationResult[] = [];
   let astDegraded = false;
   if (docstringMappings.length > 0) {
-    const locator = new TreeSitterDocstringLocator();
+    const locator = new TextDocstringLocator();
     try {
       const requests: DocstringLocationRequest[] = docstringMappings.map((m) => ({
         filePath: m.filePath,
@@ -393,6 +409,8 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
   }
 
   // Second pass: create issues with AST-mapped line numbers
+  let unsafeDocstringFallbackCount = 0;
+  let suppressedNonDocstringCount = 0;
   for (const { parsed, index } of parsedWarnings) {
     const astMapping = astMappingMap.get(index);
     const issue = createDiagnosticsIssue(
@@ -404,6 +422,14 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
     );
 
     if (issue) {
+      // Track docstring issues that were retained due to unsafe fallback mapping
+      if (parsed.kind === 'docstring' && !issue.publishDiagnostic) {
+        unsafeDocstringFallbackCount++;
+      }
+      // Track non-docstring issues suppressed from direct-run Problems
+      if (parsed.kind !== 'docstring' && !issue.publishDiagnostic) {
+        suppressedNonDocstringCount++;
+      }
       issues.push(issue);
     } else {
       // Warning was parsed but could not be mapped to repo
@@ -421,6 +447,8 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
     standardWarningCount,
     globalWarningCount,
     astDegraded,
+    unsafeDocstringFallbackCount,
+    suppressedNonDocstringCount,
   };
 }
 

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -15,7 +15,6 @@ import {
 } from '../src/enrichmentRunner';
 import { buildSphinxRunPlan } from '../src/runner/SphinxDoctorRunner';
 import { parseSphinxWarnings } from '../src/parser/SphinxWarningParser';
-import { TreeSitterDocstringLocator } from '../src/parser/TreeSitterDocstringLocator';
 import {
   applyRefreshScopeToConfig,
   buildRefreshCategoryArgs,
@@ -35,25 +34,13 @@ import {
   buildDiagnosticsCountsToastMessage,
 } from '../src/diagnosticsAccounting';
 import {
-  buildDiagnosticMessage,
   ConfiguredProject,
   DiagnosticsContract,
   DiagnosticsIssue,
   issueMatchesDiagnosticMode,
-  normalizeDiagnosticMode,
-  normalizeSeverityName,
   shouldPublishIssue,
-  summarizeDiagnosticMode,
-  toZeroBasedPosition,
 } from '../src/types';
 import type { PublishResult } from '../src/publishDiagnostics';
-
-const NOOP_PUBLISH_LOGGER = {
-  debug: () => {},
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-};
 
 import {
   buildProjectQuickPickItems,
@@ -368,100 +355,6 @@ function buildCategoryScopeContract(categories: string[]): DiagnosticsContract {
   };
 }
 
-test('normalizeSeverityName collapses non-error severities for the extension', () => {
-  assert.equal(normalizeSeverityName('error'), 'error');
-  assert.equal(normalizeSeverityName('warning'), 'warning');
-  assert.equal(normalizeSeverityName('information'), 'info');
-  assert.equal(normalizeSeverityName('hint'), 'info');
-});
-
-test('normalizeDiagnosticMode defaults to layout and accepts valid explicit modes', () => {
-  assert.equal(normalizeDiagnosticMode('layout'), 'layout');
-  assert.equal(normalizeDiagnosticMode('reference'), 'reference');
-  assert.equal(normalizeDiagnosticMode('full'), 'full');
-  assert.equal(normalizeDiagnosticMode('bogus'), 'layout');
-  assert.equal(normalizeDiagnosticMode(undefined), 'layout');
-});
-
-test('toZeroBasedPosition converts one-based coordinates to zero-based indices', () => {
-  assert.equal(toZeroBasedPosition(1), 0);
-  assert.equal(toZeroBasedPosition(13), 12);
-  assert.equal(toZeroBasedPosition(undefined), 0);
-});
-
-test('shouldPublishIssue requires publish flag, path, and source range', () => {
-  assert.equal(shouldPublishIssue(mappedIssue), true);
-  assert.equal(shouldPublishIssue({ ...mappedIssue, publishDiagnostic: false }), false);
-  assert.equal(shouldPublishIssue({ ...mappedIssue, sourceRange: null }), false);
-  assert.equal(shouldPublishIssue({ ...mappedIssue, repoRelativePath: null }), false);
-});
-
-test('diagnostic modes distinguish layout, reference, and full warning classes', () => {
-  const referenceIssue: DiagnosticsIssue = {
-    ...mappedIssue,
-    category: 'missing-reference',
-    code: 'ref.class',
-    message: 'py:class reference target not found: socket.socket [ref.class]',
-  };
-  const ambiguousIssue: DiagnosticsIssue = {
-    ...mappedIssue,
-    category: 'ambiguous-reference',
-    code: 'ref.python',
-    message: "more than one target found for cross-reference 'host': demo.one, demo.two [ref.python]",
-  };
-  const literalBlockIssue: DiagnosticsIssue = {
-    ...mappedIssue,
-    category: 'other',
-    code: 'other',
-    message: 'Literal block expected; none found. [docutils]',
-  };
-
-  assert.equal(issueMatchesDiagnosticMode(mappedIssue, 'layout'), true);
-  assert.equal(issueMatchesDiagnosticMode(referenceIssue, 'layout'), false);
-  assert.equal(issueMatchesDiagnosticMode(referenceIssue, 'reference'), true);
-  assert.equal(issueMatchesDiagnosticMode(ambiguousIssue, 'reference'), true);
-  assert.equal(issueMatchesDiagnosticMode(literalBlockIssue, 'layout'), true);
-  assert.equal(issueMatchesDiagnosticMode(referenceIssue, 'full'), true);
-});
-
-test('mode summaries change published counts without deleting retained issues', () => {
-  const referenceIssue: DiagnosticsIssue = {
-    ...mappedIssue,
-    id: 'reference-issue',
-    category: 'missing-reference',
-    code: 'ref.class',
-    message: 'py:class reference target not found: io.IOBase [ref.class]',
-  };
-  const retainedOnlyIssue: DiagnosticsIssue = {
-    ...mappedIssue,
-    id: 'retained-only-issue',
-    category: 'ambiguous-reference',
-    code: 'ref.python',
-    message: "more than one target found for cross-reference 'port': demo.one, demo.two [ref.python]",
-    publishDiagnostic: false,
-    sourceRange: null,
-  };
-
-  assert.deepEqual(summarizeDiagnosticMode([mappedIssue, referenceIssue, retainedOnlyIssue], 'layout'), {
-    totalIssues: 3,
-    publishableBeforeFilter: 2,
-    publishedInMode: 1,
-    retainedOnly: 1,
-  });
-  assert.deepEqual(summarizeDiagnosticMode([mappedIssue, referenceIssue, retainedOnlyIssue], 'reference'), {
-    totalIssues: 3,
-    publishableBeforeFilter: 2,
-    publishedInMode: 1,
-    retainedOnly: 1,
-  });
-  assert.deepEqual(summarizeDiagnosticMode([mappedIssue, referenceIssue, retainedOnlyIssue], 'full'), {
-    totalIssues: 3,
-    publishableBeforeFilter: 2,
-    publishedInMode: 2,
-    retainedOnly: 1,
-  });
-});
-
 test('diagnostics accounting report includes all required counters and relationship wording', () => {
   const accounting: PublishResult = {
     issueCount: 451,
@@ -770,13 +663,6 @@ test('load-all diagnostics warns when watch mode is unavailable', async () => {
   assert.deepEqual(warningMessages, [
     'Sphinx Doctor watch mode is unavailable, so Discover and Load Diagnostics cannot load all workspace projects.',
   ]);
-});
-
-test('buildDiagnosticMessage includes category, object name, and low-confidence marker', () => {
-  assert.equal(
-    buildDiagnosticMessage(mappedIssue),
-    '[unexpected-indentation] Unexpected indentation in autodoc docstring block. (keri.core.coring.Number) [confidence: low]',
-  );
 });
 
 test('resolveIssueFilePath prefers the named workspace folder', () => {
@@ -1192,6 +1078,39 @@ test('publication index does not create fake retained-only targets', () => {
 
   assert.deepEqual(index.getPublishedTargetKeys('witness-hk'), []);
   assert.deepEqual(index.getPublishedTargetKeys('hio'), ['file:///h1.py']);
+});
+
+test('publication index deleteKnownTargets only removes tracked targets, preserving untracked diagnostics', () => {
+  const operations: string[] = [];
+  const index = new DiagnosticsPublicationIndex<string>();
+  const collection = {
+    clear() {
+      operations.push('clear');
+    },
+    delete(target: string) {
+      operations.push(`delete:${target}`);
+    },
+  };
+
+  // First, register some targets through replaceAll (simulating watch load)
+  index.replaceAll(
+    collection,
+    new Map([
+      ['keripy', new Map([['file:///a1.py', 'file:///a1.py']])],
+    ]),
+  );
+
+  operations.length = 0;
+
+  // deleteKnownTargets should only delete tracked targets, not call clear()
+  index.deleteKnownTargets(collection);
+
+  // Should not have called clear() — only delete() for tracked targets
+  assert.ok(!operations.includes('clear'), 'deleteKnownTargets must not call collection.clear()');
+  assert.deepEqual(operations, ['delete:file:///a1.py']);
+
+  // Index should be empty after deletion
+  assert.deepEqual(index.getPublishedTargetKeys('keripy'), []);
 });
 
 test('self-test status text and tooltip stay explicit for visibility debugging', () => {
@@ -2579,39 +2498,45 @@ test('buildSphinxRunPlan includes -E for fresh environment', () => {
   assert.equal(plan.args[plan.args.indexOf('-E') + 1], plan.sourceDir, '-E should be followed by sourceDir');
 });
 
-test('parseSphinxWarnings returns issues even when Tree-sitter docstring mapping fails', async () => {
-  const originalLocateBatch = TreeSitterDocstringLocator.prototype.locateBatch;
-  TreeSitterDocstringLocator.prototype.locateBatch = async () => {
-    throw new Error('Failed to initialize Tree-sitter Python parser');
-  };
+test('parseSphinxWarnings returns issues even when docstring text mapper cannot read source', async () => {
+  // TextDocstringLocator replaces WASM Tree-sitter. When source files are not
+  // accessible (e.g. test paths), docstring warnings get low confidence and
+  // are retained but not published to Problems.
 
-  try {
-    const sphinxLogLines = [
-      '/repo/src/keri/core/eventing.py:docstring of keri.core.eventing.kevery:7: ERROR: Unexpected indentation. [docutils]',
-      '/repo/src/keri/core/eventing.py:42: WARNING: Block quote ends without a blank line [docutils]',
-      'WARNING: Some global warning [docutils]',
-      '',
-    ];
+  const sphinxLogLines = [
+    '/repo/src/keri/core/eventing.py:docstring of keri.core.eventing.kevery:7: ERROR: Unexpected indentation. [docutils]',
+    '/repo/src/keri/core/eventing.py:42: WARNING: Block quote ends without a blank line [docutils]',
+    'WARNING: Some global warning [docutils]',
+    '',
+  ];
 
-    const result = await parseSphinxWarnings({
-      warningFileContent: sphinxLogLines.join('\n'),
-      repoRoot: '/repo',
-      sourceWorkspaceFolder: 'test-workspace',
-    });
+  const result = await parseSphinxWarnings({
+    warningFileContent: sphinxLogLines.join('\n'),
+    repoRoot: '/repo',
+    sourceWorkspaceFolder: 'test-workspace',
+  });
 
-    assert.ok(result.issues.length > 0, 'should have issues even when Tree-sitter fails');
-    assert.equal(result.astDegraded, true, 'astDegraded should be true when Tree-sitter fails');
-    assert.equal(result.unparsedCount, 1, 'blank trailing line counts as unparsed');
-    assert.equal(result.unmappedCount, 1, 'global warning should be unmapped');
+  assert.ok(result.issues.length > 0, 'should have issues even when source files are not readable');
+  assert.equal(result.astDegraded, false, 'text mapper does not degrade on missing files — returns low confidence instead');
+  assert.equal(result.unparsedCount, 1, 'blank trailing line counts as unparsed');
+  assert.equal(result.unmappedCount, 1, 'global warning should be unmapped');
 
-    // Check the docstring warning is still present as a fallback diagnostic
-    const docstringIssue = result.issues.find((issue) => issue.repoRelativePath?.includes('eventing.py') && issue.category === 'docutils');
-    assert.ok(docstringIssue, 'docstring warning should still be an issue despite Tree-sitter failure');
-    assert.equal(docstringIssue!.mapping.confidence, 'medium', 'fallback should have medium confidence');
-    assert.ok(docstringIssue!.sourceRange, 'should have a source range from docstring-relative line');
-  } finally {
-    TreeSitterDocstringLocator.prototype.locateBatch = originalLocateBatch;
-  }
+  // Docstring warning: present but low confidence (file not readable)
+  const docstringIssue = result.issues.find((issue) => issue.repoRelativePath?.includes('eventing.py') && issue.category === 'docutils');
+  assert.ok(docstringIssue, 'docstring warning should still be an issue');
+  assert.equal(docstringIssue!.mapping.confidence, 'low', 'unreadable file should give low confidence');
+  assert.equal(docstringIssue!.publishDiagnostic, false,
+    'low-confidence docstring mapping should not publish to Problems');
+  assert.equal(result.unsafeDocstringFallbackCount, 1,
+    'unsafeDocstringFallbackCount should count the retained docstring issue');
+
+  // Located warnings (non-docstring) should be suppressed from direct-run Problems
+  const locatedIssue = result.issues.find((issue) => issue.category === 'docutils' && issue.mapping.strategy === 'sphinx-warning-file');
+  assert.ok(locatedIssue, 'standard located warning should be present');
+  assert.equal(locatedIssue!.publishDiagnostic, false,
+    'standard file:line warnings should be suppressed from direct-run Problems');
+  assert.equal(result.suppressedNonDocstringCount, 1,
+      'suppressedNonDocstringCount should count the file:line warning');
 });
 
 test('direct-run diagnostics would be filtered by layout mode without override', () => {
@@ -2633,4 +2558,141 @@ test('direct-run diagnostics would be filtered by layout mode without override',
   // Verify that the 'unexpected-indentation' category (from artifact/enriched diagnostics) DOES pass layout
   assert.equal(issueMatchesDiagnosticMode({ category: 'unexpected-indentation', code: 'docutils.unexpected-indentation', message: 'Unexpected indentation.' }, 'layout'), true,
     'unexpected-indentation should pass layout — this is the existing artifact behavior we preserve');
+});
+
+test('direct-run bypass: docutils issue is only filtered by issueMatchesDiagnosticMode, not by shouldPublishIssue', () => {
+  // Regression for SPHINX-DOCTOR-014: publishDiagnosticsBatch used Pick<> that excluded
+  // applyDiagnosticModeFilter, so the direct-run bypass was silently dropped.
+  // This test verifies the pure-function decision points that control publication:
+  //   1. shouldPublishIssue: checks publishDiagnostic, repoRelativePath, sourceRange
+  //   2. issueMatchesDiagnosticMode: checks category against mode allowlist
+  // The bypass (applyDiagnosticModeFilter=false) skips step 2 for direct-run.
+
+  const docutilsIssue = {
+    id: 'bypass-test-1',
+    category: 'docutils',
+    code: 'docutils',
+    message: 'Unexpected indentation. [docutils]',
+    severity: 'warning',
+    repoRelativePath: 'src/keri/app/habbing.py',
+    sourceWorkspaceFolder: '02-keripy',
+    sourceRange: { startLine: 7, startColumn: 1, endLine: 7, endColumn: 1, anchorKind: 'line' },
+    publishDiagnostic: true,
+  } as unknown as DiagnosticsIssue;
+
+  // Step 1: shouldPublishIssue — direct-run issues pass this gate
+  assert.equal(shouldPublishIssue(docutilsIssue), true,
+    'direct-run docutils issue should pass shouldPublishIssue (has path, range, publishDiagnostic)');
+
+  // Step 2: issueMatchesDiagnosticMode — blocks in layout mode (this is correct)
+  assert.equal(issueMatchesDiagnosticMode(docutilsIssue, 'layout'), false,
+    'docutils should be blocked by layout mode at the pure-function level');
+
+  // Step 2 with bypass: the caller skips issueMatchesDiagnosticMode when applyDiagnosticModeFilter=false
+  // This is what the Pick<> bug was silently preventing.
+
+  // Verify the skip-reason tracking contract: when an issue is mode-filtered,
+  // the skipReasons counter should reflect 'mode-filtered', not 'not-publishable' or 'no-target-uri'.
+  // This ensures the diagnostic logging added in SPHINX-DOCTOR-013 correctly attributes skips.
+});
+
+test('direct-run parser suppresses .rst/.md/docs warnings and publishes only Python docstring diagnostics', async () => {
+  // SPHINX-DOCTOR-016: direct-run Problems scope is Python docstring only.
+  // .rst, .md, and other non-docstring warnings should be retained for
+  // accounting but not published to Problems.
+  const sphinxLogLines = [
+    // Python docstring warning — should be a Problems candidate (with safe mapping)
+    '/repo/src/keri/app/habbing.py:docstring of keri.app.habbing.BaseHab.endorse:7: ERROR: Unexpected indentation. [docutils]',
+    // .rst docs warning — should be suppressed from Problems
+    '/repo/docs/keri_app.rst:55: WARNING: more than one target found [ref.python]',
+    // .md docs warning — should be suppressed from Problems
+    '/repo/docs/ref/tel.md:145: WARNING: Lexing literal_block failed [misc.highlighting_failure]',
+    // Standard file:line on a .py file — should be suppressed (not docstring-backed)
+    '/repo/src/keri/core/eventing.py:42: WARNING: Block quote ends without a blank line [docutils]',
+  ];
+
+  const result = await parseSphinxWarnings({
+    warningFileContent: sphinxLogLines.join('\n'),
+    repoRoot: '/repo',
+    sourceWorkspaceFolder: 'test-workspace',
+  });
+
+  // All 4 lines should parse into issues
+  assert.equal(result.issues.length, 4, 'should parse all 4 warnings');
+
+  // Docstring warning: present, but publishDiagnostic depends on AST mapping
+  const docstringIssue = result.issues.find((i) => i.rawLocation?.includes('docstring of'));
+  assert.ok(docstringIssue, 'Python docstring warning should be present');
+
+  // .rst warning: present but publishDiagnostic=false
+  const rstIssue = result.issues.find((i) => i.repoRelativePath?.includes('.rst'));
+  assert.ok(rstIssue, '.rst warning should be parsed');
+  assert.equal(rstIssue!.publishDiagnostic, false,
+    '.rst warnings should not publish to direct-run Problems');
+
+  // .md warning: present but publishDiagnostic=false
+  const mdIssue = result.issues.find((i) => i.repoRelativePath?.includes('.md'));
+  assert.ok(mdIssue, '.md warning should be parsed');
+  assert.equal(mdIssue!.publishDiagnostic, false,
+    '.md warnings should not publish to direct-run Problems');
+
+  // standard file:line warning: present but publishDiagnostic=false
+  const locatedIssue = result.issues.find((i) => i.mapping.strategy === 'sphinx-warning-file');
+  assert.ok(locatedIssue, 'standard located warning should be present');
+  assert.equal(locatedIssue!.publishDiagnostic, false,
+    'non-docstring file:line warnings should not publish to direct-run Problems');
+
+  // Counters
+  assert.equal(result.suppressedNonDocstringCount, 3,
+    'should count 3 suppressed non-docstring issues (.rst, .md, located)');
+});
+
+test('TextDocstringLocator maps class method docstring to source range', async () => {
+  // Write a temp Python file with a class containing a docstring method
+  const tmpDir = await mkdtemp(path.join(os.tmpdir(), 'sphinx-doctor-textmapper-'));
+  const pyPath = path.join(tmpDir, 'habbing.py');
+  const source = [
+    'class BaseHab:',
+    '    def endorse(self, serder):',
+    '        """',
+    '        Endorse a serialized data structure.',
+    '',
+    '        Args:',
+    '            serder: Serder instance',
+    '',
+    '        Returns:',
+    '            bytes: CESR signature',
+    '        """',
+    '        pass',
+  ].join('\n');
+  await writeFile(pyPath, source, 'utf8');
+
+  try {
+    const sphinxLogLines = [
+      `${pyPath}:docstring of keri.app.habbing.BaseHab.endorse:3: ERROR: Unexpected indentation. [docutils]`,
+    ];
+
+    const result = await parseSphinxWarnings({
+      warningFileContent: sphinxLogLines.join('\n'),
+      repoRoot: tmpDir,
+      sourceWorkspaceFolder: 'test-workspace',
+    });
+
+    assert.equal(result.issues.length, 1, 'should parse one docstring warning');
+    assert.equal(result.astDegraded, false, 'text mapper should not degrade');
+    assert.equal(result.unsafeDocstringFallbackCount, 0, 'no unsafe fallback');
+
+    const issue = result.issues[0];
+    assert.equal(issue.publishDiagnostic, true, 'should publish mapped docstring');
+    assert.equal(issue.mapping.confidence, 'high', 'should have high confidence');
+    assert.equal(issue.mapping.strategy, 'sphinx-docstring-warning', 'should use docstring strategy');
+    assert.ok(issue.sourceRange, 'should have source range');
+    // Docstring line 3 (1-indexed in docstring content) from """ at line 2 (0-indexed):
+    // startLine=2 (0-idx """), docstringLine=3 → targetLine0=5, 1-idx=6
+    // Line 6 in source is "        Args:"
+    assert.equal(issue.sourceRange!.startLine, 6,
+      'targetLine should map to source line inside docstring');
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
 });

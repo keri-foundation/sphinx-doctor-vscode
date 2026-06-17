@@ -401,12 +401,6 @@ async function discoverDiagnosticsCandidates(
   return candidates;
 }
 
-async function discoverProjectDiagnosticsCandidates(
-  project: ConfiguredProject,
-): Promise<DiscoveredInventoryCandidate[]> {
-  return discoverDiagnosticsCandidates(inventorySearchTargets(project), project.inventoryWorkspaceFolder);
-}
-
 function projectSourceRoot(
   project: ConfiguredProject,
   workspaceFolders: WorkspaceFolderInfo[],
@@ -1402,16 +1396,16 @@ export function registerCommands(
           });
 
           dependencies.logger.info(
-            `Sphinx Doctor run context: selectedWorkspaceFolder=${workspaceFolderInfo.name}; cwd=${plan.cwd}; command=${plan.command}; args=${plan.args.join(' ')}; warningFile=${plan.warningFile}; exists=${result.warningFileExists}; bytes=${warningSummary.byteLength}; lines=${warningSummary.lineCount}; first10=${warningSummary.firstTenLines}; docstring=${warningSummary.docstringWarningCount}; standard=${warningSummary.standardWarningCount}; global=${warningSummary.globalWarningCount}; parserRawLines=${parseResult.totalLines}; parsed=${parseResult.issues.length}; unparsed=${parseResult.unparsedCount}; mapped=${parseResult.issues.length}; unmapped=${parseResult.unmappedCount}; publishable=${parseResult.issues.length}; astDegraded=${parseResult.astDegraded}.`,
+            `Sphinx Doctor run context: selectedWorkspaceFolder=${workspaceFolderInfo.name}; cwd=${plan.cwd}; command=${plan.command}; args=${plan.args.join(' ')}; warningFile=${plan.warningFile}; exists=${result.warningFileExists}; bytes=${warningSummary.byteLength}; lines=${warningSummary.lineCount}; first10=${warningSummary.firstTenLines}; docstring=${warningSummary.docstringWarningCount}; standard=${warningSummary.standardWarningCount}; global=${warningSummary.globalWarningCount}; parserRawLines=${parseResult.totalLines}; parsed=${parseResult.issues.length}; unparsed=${parseResult.unparsedCount}; mapped=${parseResult.issues.length}; unmapped=${parseResult.unmappedCount}; publishable=${parseResult.issues.length}; astDegraded=${parseResult.astDegraded}; unsafeDocstringFallback=${parseResult.unsafeDocstringFallbackCount}; suppressedNonDocstring=${parseResult.suppressedNonDocstringCount}.`,
           );
 
           dependencies.logger.info(
-            `Parsed ${parseResult.issues.length} issues from ${parseResult.totalLines} lines (${parseResult.unmappedCount} unmapped, ${parseResult.unparsedCount} unparsed)`,
+            `Parsed ${parseResult.issues.length} issues from ${parseResult.totalLines} lines (${parseResult.unmappedCount} unmapped, ${parseResult.unparsedCount} unparsed, ${parseResult.suppressedNonDocstringCount} non-docstring suppressed, ${parseResult.unsafeDocstringFallbackCount} unsafe docstring fallback retained)`,
           );
 
           if (parseResult.astDegraded) {
             dependencies.logger.warn(
-              'Tree-sitter docstring mapping unavailable; continuing with fallback file/line diagnostics (mapping confidence may be reduced).',
+              `Python docstring text mapper degraded; ${parseResult.unsafeDocstringFallbackCount} docstring warnings retained (not published to Problems — source docstring range could not be determined). ${parseResult.suppressedNonDocstringCount} non-docstring warnings also suppressed.`,
             );
           }
 
@@ -1488,7 +1482,7 @@ export function registerCommands(
           );
 
           dependencies.logger.info(
-            `Direct-run diagnostics published for ${workspaceFolderInfo.name}: ${publishResult.issueCount} issues, ${publishResult.publishableBeforeFilter} publishable before filter, ${publishResult.publishedDiagnostics} published across ${publishResult.targetUriCount} target URIs; ${publishResult.filteredByMode} filtered by mode, ${publishResult.skippedIssues} skipped, ${publishResult.resolutionFailures} resolution failures. Warning file: ${plan.warningFile}.`,
+            `Direct-run diagnostics published for ${workspaceFolderInfo.name}: ${publishResult.issueCount} issues, ${publishResult.publishableBeforeFilter} publishable before filter, ${publishResult.publishedDiagnostics} published across ${publishResult.targetUriCount} target URIs; ${publishResult.filteredByMode} filtered by mode, ${publishResult.skippedIssues} skipped, ${publishResult.resolutionFailures} resolution failures${publishResult.skipReasons ? `; skip breakdown: not-publishable=${publishResult.skipReasons['not-publishable']}, mode-filtered=${publishResult.skipReasons['mode-filtered']}, no-target-uri=${publishResult.skipReasons['no-target-uri']}` : ''}. Warning file: ${plan.warningFile}.`,
           );
 
           const statusMessage =

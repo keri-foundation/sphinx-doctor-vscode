@@ -1,4 +1,5 @@
 import * as assert from 'node:assert';
+import path from 'node:path';
 import { test } from 'node:test';
 import { parseSphinxWarnings } from '../src/parser/SphinxWarningParser';
 
@@ -169,9 +170,11 @@ test('parseSphinxWarnings parses real keripy docstring warning', async () => {
   assert.strictEqual(issue.message, 'Unexpected indentation. (in keri.app.habbing.BaseHab.endorse)');
   assert.strictEqual(issue.repoRelativePath, 'src/keri/app/habbing.py');
   assert.strictEqual(issue.sourceRange?.startLine, 7);
-  assert.strictEqual(issue.sourceRange?.anchorKind, 'docstring-line');
-  // AST mapping fails in test environment, so it falls back to low confidence
+  // AST mapping fails in test environment (source file doesn't exist on disk),
+  // so the anchor kind falls back to docstring-line-fallback.
+  assert.strictEqual(issue.sourceRange?.anchorKind, 'docstring-line-fallback');
   assert.strictEqual(issue.mapping.confidence, 'low');
+  assert.strictEqual(issue.publishDiagnostic, false);
 });
 
 test('parseSphinxWarnings handles warning with colons in message', async () => {
@@ -237,7 +240,7 @@ test('parseSphinxWarnings generates unique IDs for each issue', async () => {
   assert.notStrictEqual(result.issues[0].id, result.issues[1].id);
 });
 
-test('parseSphinxWarnings sets publishDiagnostic to true', async () => {
+test('parseSphinxWarnings suppresses non-docstring warnings from direct-run Problems', async () => {
   const content = '/path/to/file.py:10: WARNING: Test [test]';
   const result = await parseSphinxWarnings({
     warningFileContent: content,
@@ -246,7 +249,9 @@ test('parseSphinxWarnings sets publishDiagnostic to true', async () => {
 
   assert.strictEqual(result.issues.length, 1);
   assert.strictEqual(result.unparsedCount, 0);
-  assert.strictEqual(result.issues[0].publishDiagnostic, true);
+  // Standard file:line warnings are retained for accounting but not published
+  // in direct-run mode (only Python docstring diagnostics are published).
+  assert.strictEqual(result.issues[0].publishDiagnostic, false);
 });
 
 test('parseSphinxWarnings sets mapping metadata', async () => {
@@ -296,11 +301,14 @@ test('parseSphinxWarnings parses docstring warning with ERROR severity', async (
   assert.strictEqual(issue.message, 'Unexpected indentation. (in keri.app.habbing.BaseHab.endorse)');
   assert.strictEqual(issue.repoRelativePath, 'src/keri/app/habbing.py');
   assert.strictEqual(issue.sourceRange?.startLine, 7);
-  assert.strictEqual(issue.sourceRange?.anchorKind, 'docstring-line');
-  assert.strictEqual(issue.mapping.confidence, 'medium');
+  // AST mapping fails in test environment (source file doesn't exist on disk),
+  // so the anchor kind falls back to docstring-line-fallback.
+  assert.strictEqual(issue.sourceRange?.anchorKind, 'docstring-line-fallback');
+  assert.strictEqual(issue.mapping.confidence, 'low');
   assert.strictEqual(issue.mapping.strategy, 'sphinx-docstring-warning');
   assert.strictEqual(issue.mapping.objectResolved, true);
   assert.strictEqual(issue.mapping.lineResolved, false);
+  assert.strictEqual(issue.publishDiagnostic, false);
 });
 
 test('parseSphinxWarnings parses docstring warning with WARNING severity', async () => {
@@ -417,7 +425,7 @@ test('parseSphinxWarnings generates unique IDs for docstring warnings', async ()
   assert.notStrictEqual(result.issues[0].id, result.issues[1].id);
 });
 
-test('parseSphinxWarnings sets publishDiagnostic to true for docstring warnings', async () => {
+test('parseSphinxWarnings retains but does not publish docstring warnings without safe AST mapping', async () => {
   const content = '/path/to/file.py:docstring of module.Class.method:7: ERROR: Test [docutils]';
   const result = await parseSphinxWarnings({
     warningFileContent: content,
@@ -426,7 +434,38 @@ test('parseSphinxWarnings sets publishDiagnostic to true for docstring warnings'
 
   assert.strictEqual(result.issues.length, 1);
   assert.strictEqual(result.unparsedCount, 0);
-  assert.strictEqual(result.issues[0].publishDiagnostic, true);
+  // Docstring warnings without high-confidence AST mapping are retained
+  // for accounting but not published to Problems.
+  assert.strictEqual(result.issues[0].publishDiagnostic, false);
+});
+
+test('parseSphinxWarnings publishes docstring warning with safe AST mapping from real fixture file', async () => {
+  const fixturePath = path.resolve('tests/fixtures/sample_module.py');
+  const repoRoot = path.resolve('tests/fixtures');
+  // The Calculator.add docstring is at source lines 10-13, with "Add two integers."
+  // at source line 11. A docstring warning at docstring line 3 maps to source line 12.
+  const content = `${fixturePath}:docstring of sample_module.Calculator.add:3: WARNING: Blank line missing after summary. [docutils]`;
+  const result = await parseSphinxWarnings({
+    warningFileContent: content,
+    repoRoot,
+  });
+
+  assert.strictEqual(result.issues.length, 1);
+  assert.strictEqual(result.unparsedCount, 0);
+  assert.strictEqual(result.unmappedCount, 0);
+
+  const issue = result.issues[0];
+  assert.strictEqual(issue.severity, 'warning');
+  assert.strictEqual(issue.category, 'docutils');
+  assert.ok(issue.message.includes('sample_module.Calculator.add'));
+  // When AST mapping succeeds, the anchor should be the safe docstring-line kind.
+  assert.strictEqual(issue.sourceRange?.anchorKind, 'docstring-line');
+  assert.strictEqual(issue.mapping.confidence, 'high');
+  assert.strictEqual(issue.mapping.lineResolved, true);
+  assert.strictEqual(issue.publishDiagnostic, true);
+  // The mapped source line should land inside the Calculator.add docstring (lines 12-15).
+  assert.ok(issue.sourceRange!.startLine >= 12, `Expected startLine >= 12, got ${issue.sourceRange?.startLine}`);
+  assert.ok(issue.sourceRange!.startLine <= 15, `Expected startLine <= 15, got ${issue.sourceRange?.startLine}`);
 });
 
 test('parseSphinxWarnings handles docstring warning with colons in message', async () => {

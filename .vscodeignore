@@ -4,7 +4,6 @@
 .vscode-test/**
 .vscode-test.mjs
 node_modules/**
-!node_modules/web-tree-sitter/**
 tests/**
 src/**
 tsconfig.json

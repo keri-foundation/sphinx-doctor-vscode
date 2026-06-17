@@ -47,7 +47,6 @@ import {
 } from './workspace';
 import {
   buildWatchModeSummary,
-  canAutoRunEnrichment,
   createSingleFlightController,
   createDebouncedTrigger,
   DebouncedTrigger,
@@ -389,6 +388,14 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
   private lastErrorCount = 0;
 
+  /**
+   * True when manual direct-run diagnostics were published and have not been
+   * explicitly cleared.  Prevents watch-mode aggregate-state updates from
+   * overwriting the status bar with "no diagnostics" when the watch refresh
+   * finds no artifact entries (e.g. keripy has no .sphinx-diagnostics/latest.json).
+   */
+  private manualDiagnosticsActive = false;
+
   private readonly lastProjectStatuses = new Map<string, string>();
 
   private summary: WatchModeSummary = buildWatchModeSummary({
@@ -719,7 +726,8 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         logger: this.logger,
       });
     } else {
-      this.publicationIndex.clear(this.collection);
+      // Delete only watch-owned targets to preserve manual direct-run diagnostics
+      this.publicationIndex.deleteKnownTargets(this.collection);
     }
 
     for (const entry of entries) {
@@ -832,6 +840,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
   }
 
   public noteManualClear(): void {
+    this.manualDiagnosticsActive = false;
     this.applySummary(
       buildWatchModeSummary({
         projectCount: this.summary.projectCount,
@@ -883,6 +892,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     this.lastFilteredByModeCount = options.filteredByMode;
     this.lastSkippedCount = options.skippedIssues;
     this.lastResolutionFailureCount = options.resolutionFailures;
+    this.manualDiagnosticsActive = options.publishedDiagnostics > 0;
     this.applySummary(
       buildWatchModeSummary({
         projectCount: Math.max(this.summary.projectCount, 1),
@@ -969,6 +979,13 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     this.lastFilteredByModeCount = aggregate.filteredByMode;
     this.lastSkippedCount = aggregate.skippedIssues;
     this.lastResolutionFailureCount = aggregate.resolutionFailures;
+
+    // Preserve manual direct-run status when watch refresh finds no
+    // diagnostics to publish (e.g. keripy has no .sphinx-diagnostics/latest.json).
+    // Only overwrite when watch actually has diagnostics to report.
+    if (this.manualDiagnosticsActive && aggregate.publishedDiagnostics === 0) {
+      return;
+    }
 
     this.applySummary(
       buildWatchModeSummary({

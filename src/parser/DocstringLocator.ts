@@ -25,7 +25,7 @@ export interface DocstringLocationResult {
   /** Human-readable reason for the confidence level */
   reason: string;
   /** Parser backend identifier */
-  backend: 'tree-sitter-python' | 'python-ast' | 'custom';
+  backend: 'tree-sitter-python' | 'python-ast' | 'text-scanner' | 'custom';
   /** Matched object name (if found) */
   matchedObject?: string;
 }

@@ -13,6 +13,20 @@ export class DiagnosticsPublicationIndex<TTarget> {
     this.targetsByProject.clear();
   }
 
+  /**
+   * Delete only the targets currently tracked by this index from the
+   * collection, without clearing targets that were published outside the
+   * index (e.g. direct-run manual diagnostics).
+   */
+  public deleteKnownTargets(collection: ClearableCollection<TTarget>): void {
+    for (const targets of this.targetsByProject.values()) {
+      for (const target of targets.values()) {
+        collection.delete(target);
+      }
+    }
+    this.targetsByProject.clear();
+  }
+
   public replaceAll(
     collection: ClearableCollection<TTarget>,
     nextTargetsByProject: PublishedTargetsByProject<TTarget>,

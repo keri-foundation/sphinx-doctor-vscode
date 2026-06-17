@@ -41,6 +41,11 @@ export interface PublishOptions {
   logger: PublishLogger;
 }
 
+export type SkipReason =
+  | 'not-publishable'
+  | 'mode-filtered'
+  | 'no-target-uri';
+
 export interface PublishResult {
   issueCount: number;
   publishableBeforeFilter: number;
@@ -49,6 +54,8 @@ export interface PublishResult {
   targetUriCount: number;
   skippedIssues: number;
   resolutionFailures: number;
+  /** Counts of skipped issues grouped by skip reason. */
+  skipReasons?: Record<SkipReason, number>;
 }
 
 export interface PublishBatchEntry {
@@ -115,10 +122,25 @@ function collectDiagnostics(
   let filteredByMode = 0;
   let skippedIssues = 0;
   let resolutionFailures = 0;
+  const skipReasons: Record<SkipReason, number> = {
+    'not-publishable': 0,
+    'mode-filtered': 0,
+    'no-target-uri': 0,
+  };
+  // Collect up to 5 samples per skip reason for diagnosis
+  const skipSamples: Record<SkipReason, DiagnosticsIssue[]> = {
+    'not-publishable': [],
+    'mode-filtered': [],
+    'no-target-uri': [],
+  };
 
   for (const issue of contract.issues) {
     if (!shouldPublishIssue(issue)) {
       skippedIssues += 1;
+      skipReasons['not-publishable'] += 1;
+      if (skipSamples['not-publishable'].length < 5) {
+        skipSamples['not-publishable'].push(issue);
+      }
       continue;
     }
 
@@ -127,6 +149,10 @@ function collectDiagnostics(
     if (!issueMatchesDiagnosticMode(issue, options.diagnosticMode) && options.applyDiagnosticModeFilter !== false) {
       skippedIssues += 1;
       filteredByMode += 1;
+      skipReasons['mode-filtered'] += 1;
+      if (skipSamples['mode-filtered'].length < 5) {
+        skipSamples['mode-filtered'].push(issue);
+      }
       continue;
     }
 
@@ -141,6 +167,10 @@ function collectDiagnostics(
     if (!resolution.filePath) {
       skippedIssues += 1;
       resolutionFailures += 1;
+      skipReasons['no-target-uri'] += 1;
+      if (skipSamples['no-target-uri'].length < 5) {
+        skipSamples['no-target-uri'].push(issue);
+      }
       options.logger.warn(
         `Skipping ${issue.id}: ${resolution.reason ?? 'Issue path could not be resolved.'}`,
       );
@@ -172,6 +202,20 @@ function collectDiagnostics(
     publishedDiagnostics += 1;
   }
 
+  // Log skip-reason samples for diagnosis when diagnostics are not publishing
+  if (publishedDiagnostics === 0 && skippedIssues > 0) {
+    for (const reason of ['not-publishable', 'mode-filtered', 'no-target-uri'] as SkipReason[]) {
+      const samples = skipSamples[reason];
+      if (samples.length > 0) {
+        for (const sample of samples) {
+          options.logger.info(
+            `Direct-run skipped issue sample (${reason}): id=${sample.id}; category=${sample.category}; repoRelativePath=${sample.repoRelativePath}; sourceWorkspaceFolder=${sample.sourceWorkspaceFolder}; sourceRange=${sample.sourceRange ? `L${sample.sourceRange.startLine}` : 'null'}; publishDiagnostic=${sample.publishDiagnostic}`,
+          );
+        }
+      }
+    }
+  }
+
   return {
     grouped,
     result: {
@@ -182,6 +226,7 @@ function collectDiagnostics(
       targetUriCount: grouped.size,
       skippedIssues,
       resolutionFailures,
+      skipReasons,
     },
   };
 }
@@ -198,7 +243,7 @@ export function publishDiagnosticsBatch(
   entries: PublishBatchEntry[],
   options: Pick<
     PublishOptions,
-    'workspaceFolders' | 'diagnosticMode' | 'logger' | 'replaceMode' | 'publicationIndex'
+    'workspaceFolders' | 'diagnosticMode' | 'logger' | 'replaceMode' | 'publicationIndex' | 'applyDiagnosticModeFilter'
   >,
 ): PublishResult {
   const grouped = new Map<string, { uri: vscode.Uri; diagnostics: vscode.Diagnostic[] }>();
@@ -210,6 +255,11 @@ export function publishDiagnosticsBatch(
   let targetUriCount = 0;
   let skippedIssues = 0;
   let resolutionFailures = 0;
+  const mergedSkipReasons: Record<SkipReason, number> = {
+    'not-publishable': 0,
+    'mode-filtered': 0,
+    'no-target-uri': 0,
+  };
   const replaceMode = options.replaceMode ?? 'full';
   const affectedProjectKeys = new Set<string>();
 
@@ -221,6 +271,7 @@ export function publishDiagnosticsBatch(
       defaultRepoRoot: entry.defaultRepoRoot,
       fixtureSourceRoot: entry.fixtureSourceRoot,
       allowFirstFolderFallback: entry.allowFirstFolderFallback,
+      applyDiagnosticModeFilter: options.applyDiagnosticModeFilter,
       logger: options.logger,
     });
 
@@ -231,6 +282,11 @@ export function publishDiagnosticsBatch(
     targetUriCount += collected.result.targetUriCount;
     skippedIssues += collected.result.skippedIssues;
     resolutionFailures += collected.result.resolutionFailures;
+    if (collected.result.skipReasons) {
+      for (const reason of ['not-publishable', 'mode-filtered', 'no-target-uri'] as SkipReason[]) {
+        mergedSkipReasons[reason] += collected.result.skipReasons[reason];
+      }
+    }
 
     const projectKey = resolveProjectKey(entry);
     if (projectKey) {
@@ -278,6 +334,7 @@ export function publishDiagnosticsBatch(
     targetUriCount,
     skippedIssues,
     resolutionFailures,
+    skipReasons: mergedSkipReasons,
   };
 }
 
