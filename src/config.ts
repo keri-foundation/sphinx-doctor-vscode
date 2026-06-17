@@ -1,19 +1,20 @@
 import type { QuickPickItem } from 'vscode';
 
 import {
+  DEFAULT_DISCOVERY_INVENTORY_WORKSPACE_FOLDER_NAMES,
+  DEFAULT_PREFERRED_INVENTORY_FILES,
+  DEFAULT_PYTHON_INTERPRETER,
+  DEFAULT_REFRESH_DEBOUNCE_MS,
+  DEFAULT_WATCH_DEBOUNCE_MS,
+  MIN_REFRESH_DEBOUNCE_MS,
+} from './constants/config';
+import {
   ConfiguredProject,
   ExtensionConfig,
   normalizeDiagnosticMode,
   ProjectRefreshConfig,
   SphinxDoctorLogLevel,
 } from './types';
-
-const DEFAULT_PREFERRED_INVENTORY_FILES = ['issues.vscode.json', 'issues.json'];
-const DEFAULT_PYTHON_INTERPRETER = 'python3';
-const DEFAULT_DISCOVERY_INVENTORY_WORKSPACE_FOLDER_NAMES: string[] = [];
-const DEFAULT_WATCH_DEBOUNCE_MS = 750;
-const DEFAULT_REFRESH_DEBOUNCE_MS = 1500;
-const MIN_REFRESH_DEBOUNCE_MS = 100;
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
