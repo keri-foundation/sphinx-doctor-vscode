@@ -9,7 +9,7 @@ import {
   InventorySelectionResult,
   ResolutionResult,
   WorkspaceFolderInfo,
-} from './types';
+} from '../types';
 
 export interface ResolveIssuePathOptions {
   workspaceFolders: WorkspaceFolderInfo[];

@@ -7,8 +7,8 @@ import {
   DiscoveryConfidence,
   InventorySearchTarget,
   WorkspaceFolderInfo,
-} from './types';
-import { resolveProjectSourceRoot } from './workspace/inventoryCandidates';
+} from '../types';
+import { resolveProjectSourceRoot } from './inventoryCandidates';
 
 export interface DiscoverySnapshot {
   existingPaths: Set<string>;
