@@ -1,7 +1,7 @@
 import * as assert from 'node:assert';
 import path from 'node:path';
 import { test } from 'node:test';
-import { parseSphinxWarnings } from '../src/parser/SphinxWarningParser';
+import { parseSphinxWarnings } from '../src/sphinx/SphinxWarningParser';
 
 test('parseSphinxWarnings parses standard warning with line number and category', async () => {
   const content = '/path/to/file.py:42: WARNING: Unknown target name: "foo" [ref]';

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { parseSphinxWarnings } from '../src/parser/SphinxWarningParser';
+import { parseSphinxWarnings } from '../src/sphinx/SphinxWarningParser';
 import {
   ConfiguredProject,
   DiagnosticsIssue,

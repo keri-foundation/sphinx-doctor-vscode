@@ -40,8 +40,8 @@ import {
   getSphinxRunPermission,
   runSphinxPlan,
   SphinxRunConfig,
-} from './runner/SphinxDoctorRunner';
-import { parseSphinxWarnings } from './parser/SphinxWarningParser';
+} from './sphinx/SphinxDoctorRunner';
+import { parseSphinxWarnings } from './sphinx/SphinxWarningParser';
 import { SphinxDoctorLogger } from './log';
 import { computeDiagnosticsAccounting, publishDiagnostics, PublishLogger } from './publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';

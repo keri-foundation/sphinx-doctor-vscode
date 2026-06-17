@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildSphinxRunPlan } from '../src/runner/SphinxDoctorRunner';
+import { buildSphinxRunPlan } from '../src/sphinx/SphinxDoctorRunner';
 
 test('buildSphinxRunPlan includes -E for fresh environment', () => {
   const plan = buildSphinxRunPlan({
