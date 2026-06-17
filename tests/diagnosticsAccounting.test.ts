@@ -4,9 +4,9 @@ import test from 'node:test';
 import {
   buildDiagnosticsAccountingReport,
   buildDiagnosticsCountsToastMessage,
-} from '../src/diagnosticsAccounting';
+} from '../src/diagnostics/diagnosticsAccounting';
 import { DiagnosticsContract } from '../src/types';
-import type { PublishResult } from '../src/publishDiagnostics';
+import type { PublishResult } from '../src/publication/publishDiagnostics';
 
 const contract: DiagnosticsContract = {
   schema: 'sphinx-diagnostics-v1',

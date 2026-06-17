@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { SphinxDoctorLogger } from './log';
+import { SphinxDoctorLogger } from '../log';
 import {
   buildDiagnosticMessage,
   DiagnosticMode,
@@ -11,8 +11,8 @@ import {
   shouldPublishIssue,
   toZeroBasedPosition,
   WorkspaceFolderInfo,
-} from './types';
-import { resolveIssueFilePath } from './workspace';
+} from '../types';
+import { resolveIssueFilePath } from '../workspace';
 
 export type PublishLogger = Pick<SphinxDoctorLogger, 'debug' | 'info' | 'warn' | 'error'>;
 

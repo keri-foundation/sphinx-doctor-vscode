@@ -23,15 +23,15 @@ import {
   inspectDiagnosticsFileBinding,
   isDiagnosticsBindingCompatible,
   loadDiagnosticsFromPath,
-} from './loadDiagnostics';
+} from './diagnostics/loadDiagnostics';
 import { SphinxDoctorLogger } from './log';
-import { DiagnosticsPublicationIndex } from './publicationIndex';
+import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
 import {
   computeDiagnosticsAccounting,
   publishDiagnosticsBatch,
   PublishBatchEntry,
   PublishResult,
-} from './publishDiagnostics';
+} from './publication/publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, listGitWorktreesPorcelain, mergeProjects } from './projectDiscovery';
 import { SELF_TEST_STATUS_TEXT } from './selfTest';
 import {

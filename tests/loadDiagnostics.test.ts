@@ -6,7 +6,7 @@ import {
   inspectDiagnosticsPayload,
   inspectDiagnosticsText,
   isDiagnosticsBindingCompatible,
-} from '../src/loadDiagnostics';
+} from '../src/diagnostics/loadDiagnostics';
 import { isRawInventoryFile } from '../src/workspace';
 import { DiagnosticsContract } from '../src/types';
 

@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   buildLoadAllDiagnosticsStatusMessage,
   loadAllDiscoveredDiagnostics,
-} from '../src/loadAllDiagnostics';
+} from '../src/diagnostics/loadAllDiagnostics';
 
 test('load-all diagnostics status message summarizes loaded and skipped projects', () => {
   assert.equal(

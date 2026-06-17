@@ -1,5 +1,5 @@
-import type { PublishResult } from './publishDiagnostics';
-import { DiagnosticMode, DiagnosticsContract } from './types';
+import type { PublishResult } from '../publication/publishDiagnostics';
+import { DiagnosticMode, DiagnosticsContract } from '../types';
 
 export interface DiagnosticsAccountingReportInput {
   contract: DiagnosticsContract;

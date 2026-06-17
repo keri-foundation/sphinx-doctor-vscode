@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { DiagnosticsPublicationIndex } from '../src/publicationIndex';
+import { DiagnosticsPublicationIndex } from '../src/publication/publicationIndex';
 
 function makeCollection(): { clear(): void; delete(target: string): void } & { operations: string[] } {
   const operations: string[] = [];

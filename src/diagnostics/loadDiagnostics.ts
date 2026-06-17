@@ -1,7 +1,7 @@
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { DiagnosticsContract } from './types';
+import { DiagnosticsContract } from '../types';
 
 export type DiagnosticsFileKind = 'enriched' | 'raw' | 'unknown';
 

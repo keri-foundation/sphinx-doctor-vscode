@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { loadDiagnosticsFromPath } from './loadDiagnostics';
+import { loadDiagnosticsFromPath } from './diagnostics/loadDiagnostics';
 import { ConfiguredProject, DiagnosticsContract, WorkspaceFolderInfo } from './types';
 import { findWorkspaceFolderByName } from './workspace';
 

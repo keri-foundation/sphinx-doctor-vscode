@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { registerCommands } from './commands';
 import { getExtensionConfig } from './config';
 import { createLogger } from './log';
-import { DiagnosticsPublicationIndex } from './publicationIndex';
+import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
 import { SphinxDoctorWatchMode } from './watchMode';
 
 export function activate(context: vscode.ExtensionContext): void {

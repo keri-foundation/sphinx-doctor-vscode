@@ -14,12 +14,12 @@ import {
   inspectDiagnosticsFile,
   isDiagnosticsBindingCompatible,
   loadDiagnosticsFromPath,
-} from './loadDiagnostics';
+} from './diagnostics/loadDiagnostics';
 import {
   buildDiagnosticsAccountingReport,
   buildDiagnosticsCountsToastMessage,
-} from './diagnosticsAccounting';
-import { loadAllDiscoveredDiagnostics } from './loadAllDiagnostics';
+} from './diagnostics/diagnosticsAccounting';
+import { loadAllDiscoveredDiagnostics } from './diagnostics/loadAllDiagnostics';
 import {
   buildEnrichmentRunPlan,
   evaluateRefreshBaselinePromotion,
@@ -43,7 +43,7 @@ import {
 } from './sphinx/SphinxDoctorRunner';
 import { parseSphinxWarnings } from './sphinx/SphinxWarningParser';
 import { SphinxDoctorLogger } from './log';
-import { computeDiagnosticsAccounting, publishDiagnostics, PublishLogger } from './publishDiagnostics';
+import { computeDiagnosticsAccounting, publishDiagnostics, PublishLogger } from './publication/publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
 import {
   listGitWorktreesPorcelain,
@@ -57,7 +57,7 @@ import {
   SELF_TEST_FALLBACK_RELATIVE_PATH,
   SELF_TEST_STATUS_TEXT,
 } from './selfTest';
-import { DiagnosticsPublicationIndex } from './publicationIndex';
+import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
 import { ConfiguredProject, DiagnosticsContract, LastLoadedDiagnosticsState, WorkspaceFolderInfo } from './types';
 import { SphinxDoctorWatchMode } from './watchMode';
 import {
