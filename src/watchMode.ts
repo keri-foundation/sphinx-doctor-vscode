@@ -33,7 +33,7 @@ import {
   PublishResult,
 } from './publication/publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, listGitWorktreesPorcelain, mergeProjects } from './workspace/projectDiscovery';
-import { SELF_TEST_STATUS_TEXT } from './selfTest';
+import { SELF_TEST_STATUS_TEXT } from './commands/selfTestDiagnostic';
 import {
   ConfiguredProject,
   ExtensionConfig,

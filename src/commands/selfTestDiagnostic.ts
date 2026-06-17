@@ -5,7 +5,7 @@ import {
   SELF_TEST_MESSAGE,
   SELF_TEST_SOURCE,
   SELF_TEST_STATUS_TEXT,
-} from './constants/selfTest';
+} from '../constants/selfTest';
 
 export {
   SELF_TEST_COMMAND_ID,

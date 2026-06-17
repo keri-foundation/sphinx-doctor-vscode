@@ -13,7 +13,7 @@ import {
 } from '../src/types';
 import {
   SELF_TEST_STATUS_TEXT,
-} from '../src/selfTest';
+} from '../src/commands/selfTestDiagnostic';
 import {
   selectInventoryCandidate,
 } from '../src/workspace/inventoryCandidates';

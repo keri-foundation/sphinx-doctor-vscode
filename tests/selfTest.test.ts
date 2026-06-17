@@ -9,7 +9,7 @@ import {
   SELF_TEST_MESSAGE,
   SELF_TEST_SOURCE,
   SELF_TEST_STATUS_TEXT,
-} from '../src/selfTest';
+} from '../src/commands/selfTestDiagnostic';
 
 test('createSelfTestDiagnosticSpec targets line 1 with the expected warning payload', () => {
   assert.deepEqual(createSelfTestDiagnosticSpec(), {

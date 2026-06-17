@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import test from 'node:test';
 
-import { SELF_TEST_COMMAND_ID } from '../src/selfTest';
+import { SELF_TEST_COMMAND_ID } from '../src/commands/selfTestDiagnostic';
 
 test('extension manifest declares the stable sphinxDoctor settings surface', async () => {
   const raw = await readFile(path.resolve('package.json'), 'utf-8');

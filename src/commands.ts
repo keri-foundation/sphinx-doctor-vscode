@@ -56,7 +56,7 @@ import {
   SELF_TEST_COMMAND_ID,
   SELF_TEST_FALLBACK_RELATIVE_PATH,
   SELF_TEST_STATUS_TEXT,
-} from './selfTest';
+} from './commands/selfTestDiagnostic';
 import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
 import { ConfiguredProject, DiagnosticsContract, LastLoadedDiagnosticsState, WorkspaceFolderInfo } from './types';
 import { SphinxDoctorWatchMode } from './watchMode';
