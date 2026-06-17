@@ -32,7 +32,7 @@ import {
   PublishBatchEntry,
   PublishResult,
 } from './publication/publishDiagnostics';
-import { discoverWorkspaceProjectDecisions, listGitWorktreesPorcelain, mergeProjects } from './projectDiscovery';
+import { discoverWorkspaceProjectDecisions, listGitWorktreesPorcelain, mergeProjects } from './workspace/projectDiscovery';
 import { SELF_TEST_STATUS_TEXT } from './selfTest';
 import {
   ConfiguredProject,
@@ -44,7 +44,7 @@ import { WatchModeSummary } from './types';
 import {
   findWorkspaceFolderByName,
   selectInventoryCandidate,
-} from './workspace';
+} from './workspace/inventoryCandidates';
 import {
   buildWatchModeSummary,
   createSingleFlightController,

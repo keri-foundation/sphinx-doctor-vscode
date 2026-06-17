@@ -17,7 +17,7 @@ import {
   summarizeProjectPublicationSnapshots,
 } from '../src/watchModeState';
 
-import { resolveProjectSourceRoot } from '../src/workspace';
+import { resolveProjectSourceRoot } from '../src/workspace/inventoryCandidates';
 import type { ConfiguredProject } from '../src/types';
 
 const configuredProject: ConfiguredProject = {

@@ -7,7 +7,7 @@ import {
   inspectDiagnosticsText,
   isDiagnosticsBindingCompatible,
 } from '../src/diagnostics/loadDiagnostics';
-import { isRawInventoryFile } from '../src/workspace';
+import { isRawInventoryFile } from '../src/workspace/inventoryCandidates';
 import { DiagnosticsContract } from '../src/types';
 
 const contract: DiagnosticsContract = {

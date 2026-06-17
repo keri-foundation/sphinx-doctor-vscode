@@ -9,7 +9,7 @@ import {
   ProjectRefreshConfig,
   WorkspaceFolderInfo,
 } from './types';
-import { findWorkspaceFolderByName } from './workspace';
+import { findWorkspaceFolderByName } from './workspace/inventoryCandidates';
 
 export interface RefreshPermission {
   allowed: boolean;

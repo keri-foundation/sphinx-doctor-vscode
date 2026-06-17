@@ -6,7 +6,7 @@ import {
   orderInventoryCandidates,
   pickInventoryCandidate,
   resolveIssueFilePath,
-} from '../src/workspace';
+} from '../src/workspace/inventoryCandidates';
 
 const contract: DiagnosticsContract = {
   schema: 'sphinx-diagnostics-v1',

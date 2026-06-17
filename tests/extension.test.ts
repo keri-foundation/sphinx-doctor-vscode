@@ -16,7 +16,7 @@ import {
 } from '../src/selfTest';
 import {
   selectInventoryCandidate,
-} from '../src/workspace';
+} from '../src/workspace/inventoryCandidates';
 
 const configuredProject: ConfiguredProject = {
   id: 'keripy',

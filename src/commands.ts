@@ -44,10 +44,10 @@ import {
 import { parseSphinxWarnings } from './sphinx/SphinxWarningParser';
 import { SphinxDoctorLogger } from './log';
 import { computeDiagnosticsAccounting, publishDiagnostics, PublishLogger } from './publication/publishDiagnostics';
-import { discoverWorkspaceProjectDecisions, mergeProjects } from './projectDiscovery';
+import { discoverWorkspaceProjectDecisions, mergeProjects } from './workspace/projectDiscovery';
 import {
   listGitWorktreesPorcelain,
-} from './projectDiscovery';
+} from './workspace/projectDiscovery';
 import {
   buildSelfTestStatusTooltip,
   clearPublishedDiagnostics,
@@ -63,7 +63,7 @@ import { SphinxDoctorWatchMode } from './watchMode';
 import {
   findWorkspaceFolderByName,
   selectInventoryCandidate,
-} from './workspace';
+} from './workspace/inventoryCandidates';
 
 const LAST_DIAGNOSTICS_STATE_KEY = 'sphinxDoctor.lastLoadedDiagnostics';
 

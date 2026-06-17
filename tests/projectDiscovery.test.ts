@@ -8,7 +8,7 @@ import {
   discoverWorkspaceProjects,
   mergeProjects,
   parseGitWorktreeListPorcelain,
-} from '../src/projectDiscovery';
+} from '../src/workspace/projectDiscovery';
 
 import type { ConfiguredProject } from '../src/types';
 

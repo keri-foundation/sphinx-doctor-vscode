@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { WorkspaceFolderInfo } from '../types';
-import { findWorkspaceFolderByName } from '../workspace';
+import { findWorkspaceFolderByName } from '../workspace/inventoryCandidates';
 
 export interface SphinxRunPermission {
   allowed: boolean;

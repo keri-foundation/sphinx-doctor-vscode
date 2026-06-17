@@ -12,7 +12,7 @@ import {
   toZeroBasedPosition,
   WorkspaceFolderInfo,
 } from '../types';
-import { resolveIssueFilePath } from '../workspace';
+import { resolveIssueFilePath } from '../workspace/inventoryCandidates';
 
 export type PublishLogger = Pick<SphinxDoctorLogger, 'debug' | 'info' | 'warn' | 'error'>;
 
