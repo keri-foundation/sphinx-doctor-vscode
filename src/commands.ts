@@ -65,6 +65,7 @@ import {
   findWorkspaceFolderByName,
   selectInventoryCandidate,
 } from './workspace/inventoryCandidates';
+import { runSafely } from './commands/runSafely';
 
 const LAST_DIAGNOSTICS_STATE_KEY = 'sphinxDoctor.lastLoadedDiagnostics';
 
@@ -948,20 +949,6 @@ async function loadOrEnrichProjectDiagnostics(
   void vscode.window.showWarningMessage(
     `Sphinx Doctor could not recognize the selected diagnostics JSON for ${projectLabel(project)}.`,
   );
-}
-
-async function runSafely(
-  logger: SphinxDoctorLogger,
-  label: string,
-  operation: () => Promise<void>,
-): Promise<void> {
-  try {
-    await operation();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    logger.error(`${label} failed: ${message}`);
-    void vscode.window.showErrorMessage(`Sphinx Doctor failed: ${message}`);
-  }
 }
 
 function createVscodeSelfTestDiagnostic(): vscode.Diagnostic {
