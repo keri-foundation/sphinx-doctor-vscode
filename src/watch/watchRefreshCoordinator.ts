@@ -79,6 +79,12 @@ export interface WatchRefreshCoordinatorDeps {
   getWatcherCount(): number;
   getKnownProjectIds(): string[];
   getStatusSummaryProjectCount(): number;
+  syncWatchers(projects: ConfiguredProject[], workspaceFolders: WorkspaceFolderInfo[]): Promise<void>;
+  onRefreshBookkeeping(info: {
+    discoveredProjectIds: string[];
+    knownProjectIds: string[];
+  }): void;
+  onProjectError(message: string): void;
 }
 
 export class WatchRefreshCoordinator {
@@ -169,6 +175,12 @@ export class WatchRefreshCoordinator {
       `Watch refresh started (${reason}): ${projects.length} projects, ${discoveredProjects.length} discovered.`,
     );
 
+    await this.deps.syncWatchers(projects, workspaceFolders);
+    this.deps.onRefreshBookkeeping({
+      discoveredProjectIds: discoveredProjects.map((p) => p.id),
+      knownProjectIds: projects.map((p) => p.id),
+    });
+
     if (!loadDiagnostics) {
       this.deps.diagnosticsState.clearProjectPublications();
       this.deps.diagnosticsState.clear();
@@ -212,6 +224,7 @@ export class WatchRefreshCoordinator {
       } catch (error) {
         errorCount += 1;
         const message = error instanceof Error ? error.message : String(error);
+        this.deps.onProjectError(message);
         this.deps.projectRunner.setProjectStatus(project.id, `error: ${message}`);
         this.deps.logger.error(`Watch refresh failed for ${project.id}: ${message}`);
       }
@@ -390,7 +403,7 @@ export class WatchRefreshCoordinator {
     this.disposeAutoRefreshTriggers();
   }
 
-  private async resolveKnownProjects(
+  public async resolveKnownProjects(
     config: ExtensionConfig,
     workspaceFolders: WorkspaceFolderInfo[],
   ): Promise<ConfiguredProject[]> {
