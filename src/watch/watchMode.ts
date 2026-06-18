@@ -60,6 +60,7 @@ import {
 } from './watchFormatting';
 import { WatchStatusController } from './watchStatus';
 import { WatchDiagnosticsState } from './watchDiagnosticsState';
+import { WatchEventSuppression } from './watchEventSuppression';
 
 const NOOP_PUBLISH_LOGGER = {
   debug: () => {},
@@ -204,6 +205,7 @@ export {
 export class SphinxDoctorWatchMode implements vscode.Disposable {
   private readonly statusController: WatchStatusController;
   private readonly diagnosticsState = new WatchDiagnosticsState();
+  private readonly eventSuppression = new WatchEventSuppression();
 
   private watchers = new Map<string, vscode.FileSystemWatcher>();
 
@@ -212,8 +214,6 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
   private autoRefreshTriggers = new Map<string, DebouncedTrigger>();
 
   private readonly projectRefreshSingleFlight = createSingleFlightController();
-
-  private readonly suppressedWatchPaths = new Map<string, number>();
 
   private activated = false;
 
@@ -784,25 +784,11 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
   }
 
   private suppressWatchEvents(filePaths: string[]): void {
-    const expiresAt = Date.now() + 2000;
-    for (const filePath of filePaths) {
-      this.suppressedWatchPaths.set(path.resolve(filePath), expiresAt);
-    }
+    this.eventSuppression.recordSuppressed(filePaths);
   }
 
   private shouldSuppressWatchEvent(filePath: string): boolean {
-    const normalizedPath = path.resolve(filePath);
-    const expiresAt = this.suppressedWatchPaths.get(normalizedPath);
-    if (expiresAt === undefined) {
-      return false;
-    }
-
-    if (expiresAt < Date.now()) {
-      this.suppressedWatchPaths.delete(normalizedPath);
-      return false;
-    }
-
-    return true;
+    return this.eventSuppression.isSuppressed(filePath);
   }
 
   private async publishProjectDiagnosticsFromPath(
