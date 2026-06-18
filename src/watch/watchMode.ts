@@ -33,7 +33,6 @@ import {
   PublishResult,
 } from '../publication/publishDiagnostics';
 import { discoverWorkspaceProjectDecisions, listGitWorktreesPorcelain, mergeProjects } from '../workspace/projectDiscovery';
-import { SELF_TEST_STATUS_TEXT } from '../commands/selfTestDiagnostic';
 import {
   ConfiguredProject,
   ExtensionConfig,
@@ -52,17 +51,15 @@ import {
   DebouncedTrigger,
   getRefreshOnSaveDecision,
   getRefreshOnSaveDebounceMs,
-  formatWatchModeText,
-  formatWatchModeTooltip,
   hasOpenWorkspaceFolders,
   ProjectPublicationSnapshot,
   runWatchModeStartup,
   summarizeProjectPublicationSnapshots,
 } from './watchModeState';
 import {
-  applyExtensionModeBadge,
   buildTroubleshootReport,
 } from './watchFormatting';
+import { WatchStatusController } from './watchStatus';
 
 const NOOP_PUBLISH_LOGGER = {
   debug: () => {},
@@ -205,7 +202,7 @@ export {
 } from './watchFormatting';
 
 export class SphinxDoctorWatchMode implements vscode.Disposable {
-  private readonly statusItem: vscode.StatusBarItem;
+  private readonly statusController: WatchStatusController;
 
   private watchers = new Map<string, vscode.FileSystemWatcher>();
 
@@ -251,28 +248,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
   private lastErrorCount = 0;
 
-  /**
-   * True when manual direct-run diagnostics were published and have not been
-   * explicitly cleared.  Prevents watch-mode aggregate-state updates from
-   * overwriting the status bar with "no diagnostics" when the watch refresh
-   * finds no artifact entries (e.g. keripy has no .sphinx-diagnostics/latest.json).
-   */
-  private manualDiagnosticsActive = false;
-
   private readonly lastProjectStatuses = new Map<string, string>();
-
-  private summary: WatchModeSummary = buildWatchModeSummary({
-    projectCount: 0,
-    loadedProjectCount: 0,
-    issueCount: 0,
-    publishableBeforeFilter: 0,
-    publishedDiagnostics: 0,
-    watcherCount: 0,
-    rawPendingCount: 0,
-    errorCount: 0,
-    diagnosticMode: 'layout',
-    message: 'Sphinx Doctor is idle.',
-  });
 
   public constructor(
     private readonly context: vscode.ExtensionContext,
@@ -280,12 +256,12 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     private readonly logger: SphinxDoctorLogger,
     private readonly publicationIndex: DiagnosticsPublicationIndex<vscode.Uri>,
   ) {
-    this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    this.statusItem.command = 'sphinxDoctor.showStatus';
-    this.applySummary(this.summary);
+    const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    statusItem.command = 'sphinxDoctor.showStatus';
+    this.statusController = new WatchStatusController(statusItem, this.context.extensionMode);
 
     this.context.subscriptions.push(
-      this.statusItem,
+      statusItem,
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
         void this.restart('workspace folders changed');
       }),
@@ -302,7 +278,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
   public async start(): Promise<void> {
     this.activated = true;
-    this.statusItem.show();
+    this.statusController.show();
     const config = getExtensionConfig();
     this.logger.setLevel(config.logLevel);
     this.logger.info(
@@ -320,7 +296,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     }
     if (!config.watchEnabled) {
       this.lastError = undefined;
-      this.applySummary(
+      this.statusController.applySummary(
         buildWatchModeSummary({
           projectCount: 0,
           loadedProjectCount: 0,
@@ -357,7 +333,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       this.lastErrorCount = 0;
       this.lastProjectPublications.clear();
       this.lastProjectStatuses.clear();
-      this.applySummary(
+      this.statusController.applySummary(
         buildWatchModeSummary({
           projectCount: 0,
           loadedProjectCount: 0,
@@ -426,7 +402,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       this.lastRawPendingCount = 0;
       this.lastErrorCount = 0;
       this.lastProjectPublications.clear();
-      this.applySummary(summary);
+      this.statusController.applySummary(summary);
       return;
     }
 
@@ -493,7 +469,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       this.lastResolutionFailureCount = 0;
       this.lastRawPendingCount = 0;
       this.lastErrorCount = 0;
-      this.applySummary(
+      this.statusController.applySummary(
         buildWatchModeSummary({
           projectCount: projects.length,
           loadedProjectCount: 0,
@@ -642,16 +618,17 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
   }
 
   public showStatus(): void {
+    const currentSummary = this.statusController.getSummary();
     const lines = [
       'Sphinx Doctor status report:',
       `- activated: ${this.activated}`,
-      `- watch summary: ${this.summary.state}`,
+      `- watch summary: ${currentSummary.state}`,
       `- last refresh reason: ${this.lastRefreshReason}`,
       `- workspace folders: ${this.lastWorkspaceFolders.join(', ') || 'none'}`,
       `- configured projects: ${this.lastConfiguredProjectIds.join(', ') || 'none'}`,
       `- discovered projects: ${this.lastDiscoveredProjectIds.join(', ') || 'none'}`,
       `- known projects: ${this.lastKnownProjectIds.join(', ') || 'none'}`,
-      `- diagnostic mode: ${this.summary.diagnosticMode}`,
+      `- diagnostic mode: ${currentSummary.diagnosticMode}`,
       `- last loaded diagnostics: ${this.lastLoadedDiagnosticsFiles.join(', ') || 'none'}`,
       `- last issue count: ${this.lastIssueCount}`,
       `- last publishable-before-filter count: ${this.lastPublishableBeforeFilterCount}`,
@@ -670,7 +647,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       this.logger.info(line);
     }
     this.logger.show(true);
-    void vscode.window.showInformationMessage(this.summary.message);
+    void vscode.window.showInformationMessage(currentSummary.message);
   }
 
   public buildTroubleshootReport(): string {
@@ -696,17 +673,18 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         lastRawPendingCount: this.lastRawPendingCount,
         lastErrorCount: this.lastErrorCount,
         lastError: this.lastError,
-        summary: this.summary,
+        summary: this.statusController.getSummary(),
         projectStatuses: [...this.lastProjectStatuses.entries()],
       },
     });
   }
 
   public noteManualClear(): void {
-    this.manualDiagnosticsActive = false;
-    this.applySummary(
+    this.statusController.setManualDiagnosticsActive(false);
+    const currentSummary = this.statusController.getSummary();
+    this.statusController.applySummary(
       buildWatchModeSummary({
-        projectCount: this.summary.projectCount,
+        projectCount: currentSummary.projectCount,
         loadedProjectCount: 0,
         issueCount: 0,
         publishableBeforeFilter: 0,
@@ -714,7 +692,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         watcherCount: this.watchers.size,
         rawPendingCount: 0,
         errorCount: 0,
-        diagnosticMode: this.summary.diagnosticMode,
+        diagnosticMode: currentSummary.diagnosticMode,
         message: 'Sphinx Doctor diagnostics cleared.',
       }),
     );
@@ -725,15 +703,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     diagnosticCount: number,
     tooltip: string,
   ): void {
-    this.statusItem.text = applyExtensionModeBadge(
-      SELF_TEST_STATUS_TEXT,
-      this.context.extensionMode,
-    );
-    this.statusItem.tooltip = tooltip || [
-      'Sphinx Doctor self-test diagnostic published.',
-      `Target: ${targetUri.toString()}`,
-      `Published diagnostics: ${diagnosticCount}`,
-    ].join('\n');
+    this.statusController.applySelfTestStatus(targetUri, diagnosticCount, tooltip);
   }
 
   public noteManualDiagnosticsPublished(options: {
@@ -755,10 +725,11 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     this.lastFilteredByModeCount = options.filteredByMode;
     this.lastSkippedCount = options.skippedIssues;
     this.lastResolutionFailureCount = options.resolutionFailures;
-    this.manualDiagnosticsActive = options.publishedDiagnostics > 0;
-    this.applySummary(
+    this.statusController.setManualDiagnosticsActive(options.publishedDiagnostics > 0);
+    const currentSummary = this.statusController.getSummary();
+    this.statusController.applySummary(
       buildWatchModeSummary({
-        projectCount: Math.max(this.summary.projectCount, 1),
+        projectCount: Math.max(currentSummary.projectCount, 1),
         loadedProjectCount: 1,
         issueCount: options.issueCount,
         publishableBeforeFilter: options.publishableBeforeFilter,
@@ -766,14 +737,14 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
         watcherCount: this.watchers.size,
         rawPendingCount: 0,
         errorCount: 0,
-        diagnosticMode: this.summary.diagnosticMode,
+        diagnosticMode: currentSummary.diagnosticMode,
         message: options.message,
       }),
     );
   }
 
   public getSummary(): WatchModeSummary {
-    return this.summary;
+    return this.statusController.getSummary();
   }
 
   public getLastRefreshSnapshot(): {
@@ -800,16 +771,7 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     this.refreshTrigger?.dispose();
     this.disposeAutoRefreshTriggers();
     this.disposeWatchers();
-    this.statusItem.dispose();
-  }
-
-  private applySummary(summary: WatchModeSummary): void {
-    this.summary = summary;
-    this.statusItem.text = applyExtensionModeBadge(
-      formatWatchModeText(summary),
-      this.context.extensionMode,
-    );
-    this.statusItem.tooltip = formatWatchModeTooltip(summary);
+    this.statusController.dispose();
   }
 
   private resetRefreshTrigger(debounceMs: number): void {
@@ -846,11 +808,11 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     // Preserve manual direct-run status when watch refresh finds no
     // diagnostics to publish (e.g. keripy has no .sphinx-diagnostics/latest.json).
     // Only overwrite when watch actually has diagnostics to report.
-    if (this.manualDiagnosticsActive && aggregate.publishedDiagnostics === 0) {
+    if (this.statusController.isManualDiagnosticsActive() && aggregate.publishedDiagnostics === 0) {
       return;
     }
 
-    this.applySummary(
+    this.statusController.applySummary(
       buildWatchModeSummary({
         projectCount: options.projectCount,
         loadedProjectCount: aggregate.loadedProjectCount,
@@ -928,15 +890,16 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     });
     this.lastRawPendingCount = 0;
     this.lastErrorCount = 0;
+    this.statusController.setManualDiagnosticsActive(false);
     this.applyAggregateState({
-      projectCount: this.lastKnownProjectIds.length || Math.max(this.summary.projectCount, 1),
+      projectCount: this.lastKnownProjectIds.length || Math.max(this.statusController.getSummary().projectCount, 1),
       diagnosticMode: config.diagnosticsMode,
       watcherCount: this.watchers.size,
       rawPendingCount: this.lastRawPendingCount,
       errorCount: this.lastErrorCount,
       message:
         result.publishedDiagnostics > 0
-          ? `Watching ${this.lastKnownProjectIds.length || Math.max(this.summary.projectCount, 1)} projects in ${config.diagnosticsMode} mode with ${summarizeProjectPublicationSnapshots(this.lastProjectPublications.values()).issueCount} issues, ${summarizeProjectPublicationSnapshots(this.lastProjectPublications.values()).publishableBeforeFilter} publishable before filter, and ${summarizeProjectPublicationSnapshots(this.lastProjectPublications.values()).publishedDiagnostics} published diagnostics.`
+          ? `Watching ${this.lastKnownProjectIds.length || Math.max(this.statusController.getSummary().projectCount, 1)} projects in ${config.diagnosticsMode} mode with ${summarizeProjectPublicationSnapshots(this.lastProjectPublications.values()).issueCount} issues, ${summarizeProjectPublicationSnapshots(this.lastProjectPublications.values()).publishableBeforeFilter} publishable before filter, and ${summarizeProjectPublicationSnapshots(this.lastProjectPublications.values()).publishedDiagnostics} published diagnostics.`
           : undefined,
     });
     this.setProjectStatus(
