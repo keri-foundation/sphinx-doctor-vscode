@@ -33,9 +33,9 @@ const configuredProject: ConfiguredProject = {
   mirrorRoot: '.sphinx-diagnostics',
 };
 
-let cachedWatchModeModule: typeof import('../src/watchMode.js') | undefined;
+let cachedWatchModeModule: typeof import('../src/watch/watchMode.js') | undefined;
 
-async function loadWatchModeModule(): Promise<typeof import('../src/watchMode.js')> {
+async function loadWatchModeModule(): Promise<typeof import('../src/watch/watchMode.js')> {
   if (cachedWatchModeModule) {
     return cachedWatchModeModule;
   }
@@ -61,7 +61,7 @@ async function loadWatchModeModule(): Promise<typeof import('../src/watchMode.js
   }) as typeof originalLoad;
 
   try {
-    const module = await import('../src/watchMode.js');
+    const module = await import('../src/watch/watchMode.js');
     cachedWatchModeModule = module;
     return module;
   } finally {

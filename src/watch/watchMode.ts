@@ -2,14 +2,14 @@ import path from 'node:path';
 
 import * as vscode from 'vscode';
 
-import { getExtensionConfig, projectLabel } from './config/extensionConfig';
+import { getExtensionConfig, projectLabel } from '../config/extensionConfig';
 import {
   buildEnrichmentRunPlan,
   evaluateRefreshBaselinePromotion,
   formatRefreshScopeDriftWarning,
   getEnrichmentPermission,
   runEnrichmentPlan,
-} from './enrichment/enrichmentRunner';
+} from '../enrichment/enrichmentRunner';
 import {
   buildRefreshRunPlan,
   filterRecentInventoryCandidates,
@@ -17,34 +17,34 @@ import {
   inferRefreshScopeFromContract,
   inferProjectRefreshConfig,
   runRefreshPlan,
-} from './refresh/refreshRunner';
+} from '../refresh/refreshRunner';
 import {
   inspectDiagnosticsFile,
   inspectDiagnosticsFileBinding,
   isDiagnosticsBindingCompatible,
   loadDiagnosticsFromPath,
-} from './diagnostics/loadDiagnostics';
-import { SphinxDoctorLogger } from './logging/extensionLogger';
-import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
+} from '../diagnostics/loadDiagnostics';
+import { SphinxDoctorLogger } from '../logging/extensionLogger';
+import { DiagnosticsPublicationIndex } from '../publication/publicationIndex';
 import {
   computeDiagnosticsAccounting,
   publishDiagnosticsBatch,
   PublishBatchEntry,
   PublishResult,
-} from './publication/publishDiagnostics';
-import { discoverWorkspaceProjectDecisions, listGitWorktreesPorcelain, mergeProjects } from './workspace/projectDiscovery';
-import { SELF_TEST_STATUS_TEXT } from './commands/selfTestDiagnostic';
+} from '../publication/publishDiagnostics';
+import { discoverWorkspaceProjectDecisions, listGitWorktreesPorcelain, mergeProjects } from '../workspace/projectDiscovery';
+import { SELF_TEST_STATUS_TEXT } from '../commands/selfTestDiagnostic';
 import {
   ConfiguredProject,
   ExtensionConfig,
   summarizeDiagnosticMode,
   WorkspaceFolderInfo,
-} from './types';
-import { WatchModeSummary } from './types';
+} from '../types';
+import { WatchModeSummary } from '../types';
 import {
   findWorkspaceFolderByName,
   selectInventoryCandidate,
-} from './workspace/inventoryCandidates';
+} from '../workspace/inventoryCandidates';
 import {
   buildWatchModeSummary,
   createSingleFlightController,
@@ -58,11 +58,11 @@ import {
   ProjectPublicationSnapshot,
   runWatchModeStartup,
   summarizeProjectPublicationSnapshots,
-} from './watch/watchModeState';
+} from './watchModeState';
 import {
   applyExtensionModeBadge,
   buildTroubleshootReport,
-} from './watch/watchFormatting';
+} from './watchFormatting';
 
 const NOOP_PUBLISH_LOGGER = {
   debug: () => {},
@@ -202,7 +202,7 @@ export {
   buildTroubleshootReport,
   describeExtensionMode,
   type TroubleshootReportState,
-} from './watch/watchFormatting';
+} from './watchFormatting';
 
 export class SphinxDoctorWatchMode implements vscode.Disposable {
   private readonly statusItem: vscode.StatusBarItem;

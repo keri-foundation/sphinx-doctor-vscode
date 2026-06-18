@@ -12,7 +12,7 @@ import { SphinxDoctorLogger } from '../logging/extensionLogger';
 import { computeDiagnosticsAccounting, publishDiagnostics, type PublishLogger } from '../publication/publishDiagnostics';
 import { DiagnosticsPublicationIndex } from '../publication/publicationIndex';
 import type { LastLoadedDiagnosticsState } from '../types';
-import { SphinxDoctorWatchMode } from '../watchMode';
+import { SphinxDoctorWatchMode } from '../watch/watchMode';
 
 import type { SelectedProjectDiagnostics } from './projectSelection';
 

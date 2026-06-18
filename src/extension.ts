@@ -4,7 +4,7 @@ import { registerCommands } from './commands/registerCommands';
 import { getExtensionConfig } from './config/extensionConfig';
 import { createLogger } from './logging/extensionLogger';
 import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
-import { SphinxDoctorWatchMode } from './watchMode';
+import { SphinxDoctorWatchMode } from './watch/watchMode';
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = getExtensionConfig();
