@@ -4,8 +4,8 @@ import * as vscode from 'vscode';
 
 import {
   projectLabel,
-} from './config/extensionConfig';
-import { loadAllDiscoveredDiagnostics } from './diagnostics/loadAllDiagnostics';
+} from '../config/extensionConfig';
+import { loadAllDiscoveredDiagnostics } from '../diagnostics/loadAllDiagnostics';
 import {
   buildSelfTestStatusTooltip,
   clearPublishedDiagnostics,
@@ -14,24 +14,24 @@ import {
   SELF_TEST_COMMAND_ID,
   SELF_TEST_FALLBACK_RELATIVE_PATH,
   SELF_TEST_STATUS_TEXT,
-} from './commands/selfTestDiagnostic';
+} from './selfTestDiagnostic';
 import {
   discoverOnlyProject,
   selectConfiguredProject,
   selectMergedProject,
-} from './commands/projectSelection';
-import { runSafely } from './commands/runSafely';
-import { runSphinxBuildDirect } from './commands/directRun';
+} from './projectSelection';
+import { runSafely } from './runSafely';
+import { runSphinxBuildDirect } from './directRun';
 import {
   type CommandDependencies,
   explainDiagnosticsCounts,
   loadAndPublish,
   readLastLoadedDiagnosticsState,
-} from './commands/diagnosticsLoading';
+} from './diagnosticsLoading';
 import {
   loadOrEnrichProjectDiagnostics,
   runRefreshAndLoadProjectDiagnostics,
-} from './commands/refreshAndEnrichment';
+} from './refreshAndEnrichment';
 
 const TROUBLESHOOT_REPORTS_DIRECTORY = 'troubleshoot-reports';
 const TROUBLESHOOT_REPORT_FILENAME_PREFIX = 'troubleshoot-environment';

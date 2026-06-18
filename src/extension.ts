@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-import { registerCommands } from './commands';
+import { registerCommands } from './commands/registerCommands';
 import { getExtensionConfig } from './config/extensionConfig';
 import { createLogger } from './logging/extensionLogger';
 import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
