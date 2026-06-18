@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { after } from 'node:test';
 
 interface FakeDisposable { disposed: boolean; dispose(): void; }
 function createFakeDisposable(): FakeDisposable {
@@ -405,4 +405,10 @@ test('resolveKnownProjects returns configured projects when discovery is disable
   assert.equal(result[0].id, 'project-a');
 
   coordinator.dispose();
+});
+
+// Guaranteed cleanup: restore Module._load so stubs do not leak into
+// other test files or subsequent test suites.
+after(() => {
+  moduleLoader._load = originalLoad;
 });
