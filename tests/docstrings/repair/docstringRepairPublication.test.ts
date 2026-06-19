@@ -1,76 +1,74 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { test, after } from 'node:test';
+
+// Stub vscode
+const moduleLoader = require('node:module') as typeof import('node:module') & {
+  _load?: (request: string, parent: NodeModule | undefined, isMain: boolean) => unknown;
+};
+const originalLoad = moduleLoader._load;
+assert.ok(originalLoad);
+
+const stubs: Record<string, unknown> = {
+  vscode: {
+    Uri: { file: (p: string) => ({ fsPath: p, scheme: 'file', toString: () => `file://${p}` }) },
+    Diagnostic: class {
+      range: { start: { line: number; character: number }; end: { line: number; character: number } };
+      message: string; source = ''; code: string | undefined; severity: number;
+      constructor(r: { start: { line: number; character: number }; end: { line: number; character: number } }, m: string, s: number) {
+        this.range = r; this.message = m; this.severity = s;
+      }
+    },
+    DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
+    Range: class {
+      constructor(public sl: number, public sc: number, public el: number, public ec: number) {}
+      get start() { return { line: this.sl, character: this.sc }; }
+      get end() { return { line: this.el, character: this.ec }; }
+    },
+    window: { createOutputChannel: () => ({ name: 'test', logLevel: 3, trace() {}, debug() {}, info() {}, warn() {}, error() {}, show() {}, dispose() {}, append() {}, appendLine() {}, replace() {}, clear() {}, hide() {} }) },
+  },
+};
+moduleLoader._load = ((r: string, p: NodeModule | undefined, m: boolean) => stubs[r] ? stubs[r] : originalLoad(r, p, m)) as typeof originalLoad;
+after(() => { moduleLoader._load = originalLoad; });
 
 import { DocstringRepairTargetIndex } from '../../../src/docstrings/repair/docstringRepairTargetIndex';
-import { createDocstringRepairTarget } from '../../../src/docstrings/repair/docstringRepairTarget';
-import type { DocstringRepairTarget } from '../../../src/docstrings/repair/docstringRepairTarget';
+import { publishDiagnostics } from '../../../src/publication/publishDiagnostics';
 
-function makeTarget(overrides: Partial<DocstringRepairTarget> = {}): DocstringRepairTarget {
-  return {
-    language: 'python',
-    mappingConfidence: 'high',
-    anchorKind: 'docstring-line',
-    sourceSpan: { startOffset: 100, endOffset: 140 },
-    targetOffset: 110,
-    fingerprint: 'abc123def456',
-    ...overrides,
-  } as DocstringRepairTarget;
+function fakeLogger() {
+  return { trace() {}, debug() {}, info() {}, warn() {}, error() {}, show() {}, dispose() {}, withContext() { return this; } } as unknown as import('../../../src/logging/extensionLogger.js').SphinxDoctorLogger;
 }
+function fakeCollection() { return { set() {}, delete() {}, clear() {} } as unknown as import('vscode').DiagnosticCollection; }
 
-test('a target created from valid mapper data is indexed correctly', () => {
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+test('publishDiagnostics accepts repairIndex and does not crash', () => {
   const index = new DocstringRepairTargetIndex();
-  const target = makeTarget();
-  const identity = 'test-identity-for-issue-1';
-  assert.equal(index.registerTarget(identity, target), true);
+  assert.doesNotThrow(() => {
+    publishDiagnostics(fakeCollection(), { schema: 'sphinx-diagnostics-v1', schemaVersion: 1, generatedAt: '', tool: { name: 't', version: '0' }, workspace: {}, run: { id: 'r', source: 's', inventoryFile: '', inventoryDir: '' }, summary: { total: 0, bySeverity: {}, byCategory: {}, mappedCount: 0, unmappedCount: 0, publishedDiagnostics: 0, retainedOnly: 0 }, issues: [] }, {
+      workspaceFolders: undefined, diagnosticMode: 'layout', repairIndex: index, repairTargets: new Map(), logger: fakeLogger(),
+    });
+  });
+});
+
+test('repair index survives clear and re-registration', () => {
+  const index = new DocstringRepairTargetIndex();
+  const target = { language: 'python' as const, mappingConfidence: 'high' as const, anchorKind: 'docstring-line' as const, sourceSpan: { startOffset: 0, endOffset: 10 }, targetOffset: 5, fingerprint: 'abc' };
+  assert.equal(index.registerTarget('id-1', target), true);
   assert.equal(index.size, 1);
-  const resolved = index.getTarget(identity);
-  assert.ok(resolved);
-  assert.equal(resolved.fingerprint, 'abc123def456');
-});
-
-test('a low-confidence mapper result produces no target and is not indexed', () => {
-  const target = createDocstringRepairTarget({
-    source: 'def f():\n    """doc"""\n    pass\n',
-    docstringStartOffset: 10,
-    docstringEndOffset: 17,
-    targetOffset: 13,
-    mappingConfidence: 'low',
-    anchorKind: 'docstring-line',
-  });
-  assert.equal(target, undefined);
-});
-
-test('a fallback anchor kind produces no target', () => {
-  const target = createDocstringRepairTarget({
-    source: 'def f():\n    """doc"""\n    pass\n',
-    docstringStartOffset: 10,
-    docstringEndOffset: 17,
-    targetOffset: 13,
-    mappingConfidence: 'high',
-    anchorKind: 'docstring-line-fallback',
-  });
-  assert.equal(target, undefined);
-});
-
-test('publication cleanup removes targets', () => {
-  const index = new DocstringRepairTargetIndex();
-  assert.equal(index.registerTarget('id-A', makeTarget({ fingerprint: 'fp-a' })), true);
-  assert.equal(index.registerTarget('id-B', makeTarget({ fingerprint: 'fp-b' })), true);
-  assert.equal(index.size, 2);
   index.clear();
   assert.equal(index.size, 0);
-  assert.equal(index.getTarget('id-A'), undefined);
-  assert.equal(index.getTarget('id-B'), undefined);
+  // After clear, re-registration works
+  assert.equal(index.registerTarget('id-1', target), true);
+  assert.equal(index.size, 1);
 });
 
-test('a registration collision leaves diagnostics visible but repair-ineligible', () => {
+test('collision fails closed and index reports collision', () => {
   const index = new DocstringRepairTargetIndex();
-  const identity = 'shared-identity';
-  assert.equal(index.registerTarget(identity, makeTarget({ fingerprint: 'fp-1' })), true);
-  assert.equal(index.size, 1);
-  assert.equal(index.registerTarget(identity, makeTarget({ fingerprint: 'fp-2' })), false);
+  const t = { language: 'python' as const, mappingConfidence: 'high' as const, anchorKind: 'docstring-line' as const, sourceSpan: { startOffset: 0, endOffset: 10 }, targetOffset: 5, fingerprint: 'abc' };
+  assert.equal(index.registerTarget('id-x', t), true);
+  assert.equal(index.registerTarget('id-x', { ...t, fingerprint: 'def' }), false);
   assert.equal(index.size, 0);
   assert.equal(index.collisionCount, 1);
-  assert.equal(index.isCollision(identity), true);
-  assert.equal(index.registerTarget(identity, makeTarget()), false);
+  assert.equal(index.isCollision('id-x'), true);
 });

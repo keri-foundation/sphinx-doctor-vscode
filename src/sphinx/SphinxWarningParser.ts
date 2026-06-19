@@ -448,11 +448,11 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
         astMapping.confidence === 'high' &&
         astMapping.docstringStartOffset !== undefined &&
         astMapping.docstringEndOffset !== undefined &&
-        astMapping.docstringFingerprint !== undefined &&
-        astMapping.targetOffset !== undefined
+        astMapping.targetOffset !== undefined &&
+        astMapping.sourceText !== undefined
       ) {
         const target = createDocstringRepairTarget({
-          fingerprint: astMapping.docstringFingerprint,
+          source: astMapping.sourceText,
           docstringStartOffset: astMapping.docstringStartOffset,
           docstringEndOffset: astMapping.docstringEndOffset,
           targetOffset: astMapping.targetOffset,

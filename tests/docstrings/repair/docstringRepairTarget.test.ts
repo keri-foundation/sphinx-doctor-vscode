@@ -201,9 +201,10 @@ test('raw source text is not retained by the target object', () => {
   assert.ok(!serialized.includes('greet'));
 });
 
-test('a pre-computed fingerprint avoids the need for source text', () => {
+test('a target without source text is rejected', () => {
+  // Factory requires source — empty source is rejected
   const target = createDocstringRepairTarget({
-    fingerprint: 'abc123def456',
+    source: '',
     docstringStartOffset: 10,
     docstringEndOffset: 30,
     targetOffset: 15,
@@ -211,8 +212,7 @@ test('a pre-computed fingerprint avoids the need for source text', () => {
     anchorKind: 'docstring-line',
   });
 
-  assert.ok(target);
-  assert.equal(target.fingerprint, 'abc123def456');
+  assert.equal(target, undefined);
 });
 
 test('isValidSourceSpan rejects invalid inputs', () => {

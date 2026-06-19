@@ -44,6 +44,12 @@ export interface PythonDocstringSourceMapResult {
    * Only populated for high-confidence Python mappings.
    */
   targetOffset?: number;
+  /**
+   * Full source text used for mapping (required for factory fingerprint computation).
+   * Extension-runtime-only — not persisted in diagnostics artifacts.
+   * Only populated for high-confidence Python mappings.
+   */
+  sourceText?: string;
   /** Confidence level of the mapping */
   confidence: 'high' | 'medium' | 'low' | 'unmapped';
   /** Human-readable reason for the confidence level */

@@ -83,10 +83,8 @@ export function computeDocstringFingerprint(
 // ---------------------------------------------------------------------------
 
 export interface DocstringRepairTargetFactoryInput {
-  /** Full Python source text (required unless fingerprint is pre-computed) */
-  readonly source?: string;
-  /** Pre-computed SHA-256 fingerprint (avoids needing source text) */
-  readonly fingerprint?: string;
+  /** Full Python source text (required) */
+  readonly source: string;
   /** Exact docstring start offset (inclusive, UTF-16 code units) */
   readonly docstringStartOffset: number;
   /** Exact docstring end offset (exclusive, UTF-16 code units) */
@@ -103,10 +101,8 @@ export interface DocstringRepairTargetFactoryInput {
  * Create a verified repair target.
  *
  * Returns `undefined` for every ineligible condition.
- *
- * When `fingerprint` is provided (pre-computed by the mapper),
- * source text is not required. Otherwise, source text is used
- * to validate span bounds and compute the fingerprint.
+ * The factory computes its own SHA-256 fingerprint from the source span.
+ * No pre-computed or externally supplied fingerprint is accepted.
  */
 export function createDocstringRepairTarget(
   input: DocstringRepairTargetFactoryInput,
@@ -128,22 +124,19 @@ export function createDocstringRepairTarget(
     return undefined;
   }
 
+  if (input.source.length === 0) {
+    return undefined;
+  }
+
+  if (span.endOffset > input.source.length) {
+    return undefined;
+  }
+
   if (!offsetIsInSpan(input.targetOffset, span)) {
     return undefined;
   }
 
-  let fingerprint: string;
-  if (input.fingerprint !== undefined) {
-    // Pre-computed fingerprint — trust the mapper
-    fingerprint = input.fingerprint;
-  } else if (input.source !== undefined && input.source.length > 0) {
-    if (span.endOffset > input.source.length) {
-      return undefined;
-    }
-    fingerprint = computeDocstringFingerprint(input.source, span);
-  } else {
-    return undefined;
-  }
+  const fingerprint = computeDocstringFingerprint(input.source, span);
 
   return {
     language: 'python',

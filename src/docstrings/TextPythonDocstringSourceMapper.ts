@@ -135,6 +135,9 @@ export class TextPythonDocstringSourceMapper implements PythonDocstringSourceMap
     // targetLine0 is 0-indexed pointing at the content line within the docstring.
     const targetOffset = lineStartOffset(lines, targetLine0);
 
+    // Join lines back to source for factory fingerprint computation
+    const sourceText = lines.join('\n');
+
     return {
       targetLine: targetLine0 + 1,
       confidence: 'high',
@@ -145,6 +148,7 @@ export class TextPythonDocstringSourceMapper implements PythonDocstringSourceMap
       docstringStartOffset,
       docstringEndOffset,
       targetOffset,
+      sourceText,
       docstringFingerprint: computeSpanFingerprint(lines, docstringStartOffset, docstringEndOffset),
       backend: 'text-scanner',
     };
