@@ -29,7 +29,7 @@
     "watch": "tsc -w -p ./",
     "clean:out": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\"",
     "test": "npm run test:unit",
-    "test:unit": "npm run clean:out && npm run compile && node --test 'out/tests/*.test.js' 'out/tests/logging/*.test.js'",
+    "test:unit": "npm run clean:out && npm run compile && node scripts/run-unit-tests.mjs",
     "test:integration": "npm run compile && vscode-test --label integration",
     "test:all": "npm run test:unit && npm run test:integration",
     "package": "npm exec --yes --package @vscode/vsce -- vsce package",
