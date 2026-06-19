@@ -295,7 +295,7 @@
         "sphinxDoctor.refresh.debounceMs": {
           "type": "number",
           "default": 1500,
-          "description": "Debounce delay for save-triggered project refresh. Separate from diagnostics file watcher debounce.",
+          "description": "Debounce delay for save-triggered project refresh and save-triggered direct-run diagnostic republishing. Separate from diagnostics file watcher debounce.",
           "minimum": 100
         },
         "sphinxDoctor.directRun.enabled": {

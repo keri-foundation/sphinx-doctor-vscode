@@ -16,18 +16,43 @@ import { shouldTreatWarningFileAsEmpty, summarizeWarningFileContent } from '../s
 import type { DiagnosticsContract, WorkspaceFolderInfo } from '../types';
 
 import type { CommandDependencies } from './diagnosticsLoading';
+import type { DirectRunOutcome } from './directRunSaveRepublisher';
+
+export type { DirectRunOutcome } from './directRunSaveRepublisher';
 
 let sphinxBuildInProgress = false;
 
+let currentDirectRunWorkspaceRoot: string | null = null;
+let currentDirectRunOutputDir: string | null = null;
+
+export function getSphinxBuildInProgress(): boolean {
+  return sphinxBuildInProgress;
+}
+
+export function getCurrentDirectRunWorkspaceRoot(): string | null {
+  return currentDirectRunWorkspaceRoot;
+}
+
+export function getCurrentDirectRunOutputDir(): string | null {
+  return currentDirectRunOutputDir;
+}
+
+export interface DirectRunOptions {
+  suppressSuccessToast?: boolean;
+}
+
 export async function runSphinxBuildDirect(
   dependencies: CommandDependencies,
-): Promise<void> {
+  options: DirectRunOptions = {},
+): Promise<DirectRunOutcome> {
   // Check if a build is already in progress
   if (sphinxBuildInProgress) {
-    void vscode.window.showWarningMessage(
-      'Sphinx Doctor: A Sphinx build is already in progress. Please wait for it to complete.',
-    );
-    return;
+    if (!options.suppressSuccessToast) {
+      void vscode.window.showWarningMessage(
+        'Sphinx Doctor: A Sphinx build is already in progress. Please wait for it to complete.',
+      );
+    }
+    return 'blocked';
   }
 
   const config = getExtensionConfig();
@@ -48,7 +73,7 @@ export async function runSphinxBuildDirect(
     void vscode.window.showWarningMessage(
       `Sphinx Doctor cannot run Sphinx build: ${permission.reason}`,
     );
-    return;
+    return 'blocked';
   }
 
   // Get workspace folder
@@ -57,7 +82,7 @@ export async function runSphinxBuildDirect(
     void vscode.window.showWarningMessage(
       'Sphinx Doctor requires an open workspace folder to run Sphinx build.',
     );
-    return;
+    return 'blocked';
   }
 
   // Use first workspace folder or let user pick if multiple
@@ -69,7 +94,7 @@ export async function runSphinxBuildDirect(
       placeHolder: 'Select workspace folder for Sphinx build',
     });
     if (!picked) {
-      return;
+      return 'declined';
     }
     selectedFolder = picked;
   }
@@ -79,13 +104,20 @@ export async function runSphinxBuildDirect(
     fsPath: selectedFolder.uri.fsPath,
   };
 
+  // Store resolved workspace root for save-session binding
+  currentDirectRunWorkspaceRoot = workspaceFolderInfo.fsPath;
+  currentDirectRunOutputDir = path.resolve(workspaceFolderInfo.fsPath, config.sphinxOutputDir);
+
   // Mark build as in progress
   sphinxBuildInProgress = true;
 
   try {
     dependencies.logger.info({
       name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_BUILD_START,
-      fields: { workspaceFolder: workspaceFolderInfo.name },
+      fields: {
+        workspaceFolder: workspaceFolderInfo.name,
+        source: options.suppressSuccessToast ? 'save-triggered' : 'manual',
+      },
     });
 
     // Build run plan
@@ -135,8 +167,10 @@ export async function runSphinxBuildDirect(
       dependencies.logger.info({
         name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_CANCELED,
       });
-      void vscode.window.showInformationMessage('Sphinx Doctor: Build canceled.');
-      return;
+      if (!options.suppressSuccessToast) {
+        void vscode.window.showInformationMessage('Sphinx Doctor: Build canceled.');
+      }
+      return 'failed';
     }
 
     // Handle failure
@@ -144,7 +178,7 @@ export async function runSphinxBuildDirect(
       void vscode.window.showErrorMessage(
         `Sphinx build failed with exit code ${result.exitCode}. Check the output channel for details.`,
       );
-      return;
+      return 'failed';
     }
 
     // Check if warning file exists and has content
@@ -152,7 +186,7 @@ export async function runSphinxBuildDirect(
       void vscode.window.showWarningMessage(
         'Sphinx Doctor: Warning file was not created. Sphinx may have failed before generating it.',
       );
-      return;
+      return 'failed';
     }
 
     const warningFileContent = await vscode.workspace.fs.readFile(vscode.Uri.file(plan.warningFile));
@@ -212,24 +246,26 @@ export async function runSphinxBuildDirect(
     }
 
     if (shouldTreatWarningFileAsEmpty(warningSummary) && parseResult.issues.length === 0) {
-      void vscode.window.showInformationMessage(
-        'Sphinx Doctor: Sphinx produced no warnings (empty or single blank line in warning file).',
-      );
-      return;
+      if (!options.suppressSuccessToast) {
+        void vscode.window.showInformationMessage(
+          'Sphinx Doctor: Sphinx produced no warnings (empty or single blank line in warning file).',
+        );
+      }
+      return 'completed';
     }
 
     if (parseResult.issues.length === 0 && parseResult.unparsedCount > 0) {
       void vscode.window.showWarningMessage(
         `Sphinx Doctor: Warnings were present but none matched parser patterns (${parseResult.unparsedCount} unparsed lines).`,
       );
-      return;
+      return 'completed';
     }
 
     if (parseResult.issues.length === 0 && parseResult.unmappedCount > 0) {
       void vscode.window.showWarningMessage(
         `Sphinx Doctor: Warnings parsed but could not be mapped to files (${parseResult.unmappedCount} unmapped).`,
       );
-      return;
+      return 'completed';
     }
 
     // Create a diagnostics contract from parsed warnings
@@ -310,9 +346,12 @@ export async function runSphinxBuildDirect(
       message: statusMessage,
     });
 
-    void vscode.window.showInformationMessage(
-      `Sphinx Doctor: Published ${publishResult.publishedDiagnostics} diagnostics from Sphinx build (${parseResult.unmappedCount} unmapped warnings).`,
-    );
+    if (!options.suppressSuccessToast) {
+      void vscode.window.showInformationMessage(
+        `Sphinx Doctor: Published ${publishResult.publishedDiagnostics} diagnostics from Sphinx build (${parseResult.unmappedCount} unmapped warnings).`,
+      );
+    }
+    return 'completed';
   } finally {
     // Always reset the single-flight flag
     sphinxBuildInProgress = false;

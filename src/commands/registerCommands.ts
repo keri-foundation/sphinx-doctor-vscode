@@ -3,6 +3,7 @@ import path from 'node:path';
 import * as vscode from 'vscode';
 
 import {
+  getExtensionConfig,
   projectLabel,
 } from '../config/extensionConfig';
 import { loadAllDiscoveredDiagnostics } from '../diagnostics/loadAllDiagnostics';
@@ -22,7 +23,13 @@ import {
 } from './projectSelection';
 import { runSafely } from './runSafely';
 import { SphinxDoctorLogger } from '../logging/extensionLogger';
-import { runSphinxBuildDirect } from './directRun';
+import { runSphinxBuildDirect, getCurrentDirectRunWorkspaceRoot, getCurrentDirectRunOutputDir } from './directRun';
+import {
+  DirectRunSaveRepublisher,
+  createDefaultRepublisherScheduler,
+  type DirectRunExecutor,
+  type CommandDependenciesForRepublisher,
+} from './directRunSaveRepublisher';
 import {
   type CommandDependencies,
   explainDiagnosticsCounts,
@@ -91,6 +98,25 @@ export function registerCommands(
   context: vscode.ExtensionContext,
   dependencies: CommandDependencies,
 ): void {
+  // ── direct-run save republisher ────────────────────────────────────
+  const republisherExecutor: DirectRunExecutor = async (_deps, opts) => {
+    return await runSphinxBuildDirect(dependencies, opts);
+  };
+
+  const republisherDeps: CommandDependenciesForRepublisher = {
+    collection: dependencies.collection,
+    logger: dependencies.logger,
+    watchMode: dependencies.watchMode,
+    publicationIndex: dependencies.publicationIndex,
+  };
+
+  const republisher = new DirectRunSaveRepublisher(
+    republisherExecutor,
+    republisherDeps,
+    createDefaultRepublisherScheduler(),
+    () => getExtensionConfig().refreshDebounceMs,
+  );
+
   context.subscriptions.push(
     vscode.commands.registerCommand(SELF_TEST_COMMAND_ID, async () => {
       await runSafely(dependencies.logger, 'Publish Self-Test Diagnostic', async () => {
@@ -337,8 +363,19 @@ export function registerCommands(
   context.subscriptions.push(
     vscode.commands.registerCommand('sphinxDoctor.runSphinxBuild', async () => {
       await runSafely(dependencies.logger, 'Run Sphinx Build', async () => {
-        await runSphinxBuildDirect(dependencies);
+        const outcome = await republisher.handleExplicitRun();
+        if (outcome === 'completed') {
+          // Arm the save session after a successful manual direct run.
+          const root = getCurrentDirectRunWorkspaceRoot();
+          const outputDir = getCurrentDirectRunOutputDir();
+          if (root) {
+            republisher.armSession(root, outputDir ?? '', context);
+          }
+        }
       });
     }),
   );
+
+  // Push republisher disposal to extension context so it cleans up on deactivation.
+  context.subscriptions.push(republisher);
 }
