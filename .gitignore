@@ -3,6 +3,7 @@ out/
 dist/
 .vscode-test/
 *.vsix
+artifacts/
 
 # Python-generated artifacts
 __pycache__/

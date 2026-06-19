@@ -33,8 +33,8 @@
     "test:integration": "npm run compile && vscode-test --label integration",
     "test:real-problems": "npm run compile && vscode-test --config .vscode-test.real-problems.mjs",
     "test:all": "npm run test:unit && npm run test:integration",
-    "package": "npm exec --yes --package @vscode/vsce -- vsce package",
-    "install:local": "npm run package && code --install-extension ./sphinx-doctor-vscode-$npm_package_version.vsix --force",
+    "package": "node scripts/package-vsix.mjs",
+    "install:local": "npm run package && code --install-extension ./artifacts/sphinx-doctor-vscode-$npm_package_version.vsix --force",
     "reinstall:local": "bash scripts/reinstall-local-vsix.sh",
     "vscode:prepublish": "npm run compile"
   },
