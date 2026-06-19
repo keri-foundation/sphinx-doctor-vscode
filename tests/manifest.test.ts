@@ -80,9 +80,9 @@ test('extension manifest exposes local package and install scripts', async () =>
 
   assert.ok(manifest.scripts, 'Expected scripts section');
   assert.equal(manifest.publisher, 'keri-foundation');
-  assert.equal(manifest.scripts.package, 'npm exec --yes --package @vscode/vsce -- vsce package');
+  assert.equal(manifest.scripts.package, 'node scripts/package-vsix.mjs');
   assert.equal(
     manifest.scripts['install:local'],
-    'npm run package && code --install-extension ./sphinx-doctor-vscode-$npm_package_version.vsix --force',
+    'npm run package && code --install-extension ./artifacts/sphinx-doctor-vscode-$npm_package_version.vsix --force',
   );
 });
