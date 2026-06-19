@@ -20,36 +20,6 @@ export interface PythonDocstringSourceMapResult {
   docstringStartLine?: number;
   /** Docstring end line (1-indexed) */
   docstringEndLine?: number;
-  /**
-   * Exact UTF-16 code-unit offset of the docstring start (inclusive).
-   * Extension-runtime-only — not persisted in diagnostics artifacts.
-   * Only populated for high-confidence Python mappings.
-   */
-  docstringStartOffset?: number;
-  /**
-   * Exact UTF-16 code-unit offset of the docstring end (exclusive).
-   * Extension-runtime-only — not persisted in diagnostics artifacts.
-   * Only populated for high-confidence Python mappings.
-   */
-  docstringEndOffset?: number;
-  /**
-   * SHA-256 lowercase hex fingerprint of the canonicalized docstring source span.
-   * Extension-runtime-only — not persisted in diagnostics artifacts.
-   * Only populated for high-confidence Python mappings.
-   */
-  docstringFingerprint?: string;
-  /**
-   * Exact UTF-16 code-unit offset of the target diagnostic line start.
-   * Extension-runtime-only — not persisted in diagnostics artifacts.
-   * Only populated for high-confidence Python mappings.
-   */
-  targetOffset?: number;
-  /**
-   * Full source text used for mapping (required for factory fingerprint computation).
-   * Extension-runtime-only — not persisted in diagnostics artifacts.
-   * Only populated for high-confidence Python mappings.
-   */
-  sourceText?: string;
   /** Confidence level of the mapping */
   confidence: 'high' | 'medium' | 'low' | 'unmapped';
   /** Human-readable reason for the confidence level */

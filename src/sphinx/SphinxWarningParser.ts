@@ -8,7 +8,6 @@ import {
 } from '../types';
 import { TextPythonDocstringSourceMapper } from '../docstrings/TextPythonDocstringSourceMapper';
 import { PythonDocstringSourceMapRequest, PythonDocstringSourceMapResult } from '../docstrings/PythonDocstringSourceMapper';
-import { createDocstringRepairTarget, type DocstringRepairTarget } from '../docstrings/repair/docstringRepairTarget';
 
 /**
  * Discriminated union representing parsed Sphinx warning variants.
@@ -74,12 +73,6 @@ export interface ParseSphinxWarningsResult {
   unsafeDocstringFallbackCount: number;
   /** Count of non-docstring warnings suppressed from direct-run Problems (e.g. .rst/.md docs warnings). */
   suppressedNonDocstringCount: number;
-  /**
-   * Verified repair targets keyed by issue ID.
-   * Extension-runtime-only — not persisted in diagnostics artifacts.
-   * Only populated for high-confidence Python docstring issues.
-   */
-  repairTargets: Map<string, DocstringRepairTarget>;
 }
 
 /**
@@ -418,7 +411,6 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
   // Second pass: create issues with AST-mapped line numbers
   let unsafeDocstringFallbackCount = 0;
   let suppressedNonDocstringCount = 0;
-  const repairTargets = new Map<string, DocstringRepairTarget>();
   for (const { parsed, index } of parsedWarnings) {
     const astMapping = astMappingMap.get(index);
     const issue = createDiagnosticsIssue(
@@ -439,30 +431,6 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
         suppressedNonDocstringCount++;
       }
       issues.push(issue);
-
-      // Materialize repair target for eligible high-confidence docstring issues
-      if (
-        parsed.kind === 'docstring' &&
-        issue.publishDiagnostic &&
-        astMapping &&
-        astMapping.confidence === 'high' &&
-        astMapping.docstringStartOffset !== undefined &&
-        astMapping.docstringEndOffset !== undefined &&
-        astMapping.targetOffset !== undefined &&
-        astMapping.sourceText !== undefined
-      ) {
-        const target = createDocstringRepairTarget({
-          source: astMapping.sourceText,
-          docstringStartOffset: astMapping.docstringStartOffset,
-          docstringEndOffset: astMapping.docstringEndOffset,
-          targetOffset: astMapping.targetOffset,
-          mappingConfidence: 'high',
-          anchorKind: 'docstring-line',
-        });
-        if (target) {
-          repairTargets.set(issue.id, target);
-        }
-      }
     } else {
       // Warning was parsed but could not be mapped to repo
       unmappedCount++;
@@ -481,7 +449,6 @@ export async function parseSphinxWarnings(options: ParseSphinxWarningsOptions): 
     astDegraded,
     unsafeDocstringFallbackCount,
     suppressedNonDocstringCount,
-    repairTargets,
   };
 }
 
