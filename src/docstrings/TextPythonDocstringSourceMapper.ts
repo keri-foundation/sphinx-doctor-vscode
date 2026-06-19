@@ -124,8 +124,16 @@ export class TextPythonDocstringSourceMapper implements PythonDocstringSourceMap
       };
     }
 
+    // Compute visible-content columns for the mapped source line.
+    // This is a presentation range for the Problems squiggle, not a
+    // token-precise Python lexical span.
+    const targetSourceLine = lines[targetLine0] ?? '';
+    const visibleCols = visibleContentColumns(targetSourceLine);
+
     return {
       targetLine: targetLine0 + 1,
+      startColumn: visibleCols ? visibleCols.start + 1 : undefined,
+      endColumn: visibleCols ? visibleCols.end + 1 : undefined,
       confidence: 'high',
       reason: `Mapped to source line ${targetLine0 + 1} in docstring of ${targetParts.join('.')}`,
       matchedObject: targetParts.join('.'),
@@ -256,6 +264,25 @@ export function findDocstring(lines: string[], defLine: number): DocstringBlock 
 }
 
 // ---- UTF-16 offset helpers ----
+
+/**
+ * Compute the visible-content column range for a single source line.
+ *
+ * Presentation-only helper for mapped-line diagnostic ranges.
+ * Returns the start (first non-whitespace) and end (exclusive, last
+ * non-whitespace + 1) columns. Returns null for blank or whitespace-only
+ * lines.
+ *
+ * Columns are UTF-16 code-unit offsets (VS Code convention).
+ * This is not a token-precise Python lexical span; it covers the visible
+ * line content for squiggle rendering in the Problems pane.
+ */
+export function visibleContentColumns(line: string): { start: number; end: number } | null {
+  const start = line.search(/\S/);
+  if (start === -1) return null;
+  const end = line.trimEnd().length;
+  return { start, end };
+}
 
 /**
  * Compute the start offset of a 0-indexed line in a source split by LF.

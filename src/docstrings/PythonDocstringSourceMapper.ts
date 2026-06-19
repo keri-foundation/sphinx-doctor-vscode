@@ -16,6 +16,10 @@ export interface PythonDocstringSourceMapRequest {
 export interface PythonDocstringSourceMapResult {
   /** Absolute line number in source file (1-indexed) */
   targetLine?: number;
+  /** Visible-content start column in source line (0-indexed, UTF-16 code units) */
+  startColumn?: number;
+  /** Visible-content end column in source line (0-indexed, exclusive, UTF-16 code units) */
+  endColumn?: number;
   /** Docstring start line (1-indexed) */
   docstringStartLine?: number;
   /** Docstring end line (1-indexed) */

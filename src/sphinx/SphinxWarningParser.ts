@@ -248,9 +248,9 @@ function createDiagnosticsIssue(
 
       const sourceRange: DiagnosticsSourceRange = {
         startLine: absoluteLine,
-        startColumn: 0,
+        startColumn: astMapping?.startColumn ?? 0,
         endLine: absoluteLine,
-        endColumn: 0,
+        endColumn: astMapping?.endColumn ?? 0,
         anchorKind: hasSafeMapping ? 'docstring-line' : 'docstring-line-fallback',
       };
 
