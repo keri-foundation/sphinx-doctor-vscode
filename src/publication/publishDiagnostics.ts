@@ -13,6 +13,11 @@ import {
   WorkspaceFolderInfo,
 } from '../types';
 import { resolveIssueFilePath } from '../workspace/inventoryCandidates';
+import {
+  deriveDiagnosticIdentity,
+  DocstringRepairTargetIndex,
+} from '../docstrings/repair/docstringRepairTargetIndex';
+import type { DocstringRepairTarget } from '../docstrings/repair/docstringRepairTarget';
 
 type PublishedTargetsByProject = Map<string, Map<string, vscode.Uri>>;
 
@@ -37,6 +42,14 @@ export interface PublishOptions {
   allowFirstFolderFallback?: boolean;
   applyDiagnosticModeFilter?: boolean;
   logger: SphinxDoctorLogger;
+  /**
+   * Verified repair targets keyed by issue ID (from SphinxWarningParser).
+   * Extension-runtime-only. When provided, eligible targets are registered
+   * in `repairIndex` at publication time.
+   */
+  repairTargets?: ReadonlyMap<string, DocstringRepairTarget>;
+  /** Runtime repair target index (populated during publication when targets exist). */
+  repairIndex?: DocstringRepairTargetIndex;
 }
 
 export type SkipReason =
@@ -198,6 +211,28 @@ function collectDiagnostics(
 
     const uri = vscode.Uri.file(resolution.filePath);
     const groupKey = uri.toString();
+
+    // Register repair target when eligible
+    if (options.repairIndex && options.repairTargets) {
+      const target = options.repairTargets.get(issue.id);
+      if (target) {
+        const range = diagnostic.range;
+        const identity = deriveDiagnosticIdentity({
+          uri: groupKey,
+          diagnosticSource: diagnostic.source,
+          diagnosticCode: String(diagnostic.code ?? ''),
+          diagnosticRange: {
+            startLine: range.start.line,
+            startColumn: range.start.character,
+            endLine: range.end.line,
+            endColumn: range.end.character,
+          },
+          normalizedMessage: diagnostic.message,
+        });
+        options.repairIndex.registerTarget(identity, target);
+      }
+    }
+
     const existing = grouped.get(groupKey);
     if (existing) {
       existing.diagnostics.push(diagnostic);

@@ -1,4 +1,5 @@
 import * as fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 
 import {
   PythonDocstringSourceMapRequest,
@@ -124,6 +125,16 @@ export class TextPythonDocstringSourceMapper implements PythonDocstringSourceMap
       };
     }
 
+    // Compute exact UTF-16 code-unit offsets.
+    // docstring.startLine is 0-indexed pointing at the opening delimiter line.
+    // docstring.endLine is 0-indexed pointing at the closing delimiter line.
+    const docstringStartOffset = lineStartOffset(lines, docstring.startLine);
+    const docstringEndOffset = lineEndOffset(lines, docstring.endLine);
+
+    // targetOffset: position of the target line within the source.
+    // targetLine0 is 0-indexed pointing at the content line within the docstring.
+    const targetOffset = lineStartOffset(lines, targetLine0);
+
     return {
       targetLine: targetLine0 + 1,
       confidence: 'high',
@@ -131,6 +142,10 @@ export class TextPythonDocstringSourceMapper implements PythonDocstringSourceMap
       matchedObject: targetParts.join('.'),
       docstringStartLine: docstring.startLine + 1,
       docstringEndLine: docstring.endLine + 1,
+      docstringStartOffset,
+      docstringEndOffset,
+      targetOffset,
+      docstringFingerprint: computeSpanFingerprint(lines, docstringStartOffset, docstringEndOffset),
       backend: 'text-scanner',
     };
   }
@@ -253,4 +268,60 @@ export function findDocstring(lines: string[], defLine: number): DocstringBlock 
   }
 
   return null;
+}
+
+// ---- UTF-16 offset helpers ----
+
+/**
+ * Compute the start offset of a 0-indexed line in a source split by LF.
+ * Each line is counted as `line.length + 1` (the +1 accounts for the LF).
+ */
+export function lineStartOffset(lines: string[], lineIndex: number): number {
+  if (lineIndex < 0 || lineIndex >= lines.length) {
+    return -1;
+  }
+
+  let offset = 0;
+  for (let i = 0; i < lineIndex; i++) {
+    offset += lines[i].length + 1; // +1 for LF
+  }
+  return offset;
+}
+
+/**
+ * Compute the exclusive end offset of a 0-indexed line.
+ * The end offset is the start of the next line (or source.length for the last line).
+ */
+export function lineEndOffset(lines: string[], lineIndex: number): number {
+  if (lineIndex < 0 || lineIndex >= lines.length) {
+    return -1;
+  }
+
+  // End of this line = start of next line, or source length for last line
+  const nextStart = lineStartOffset(lines, lineIndex + 1);
+  if (nextStart < 0) {
+    // Last line: sum all lines
+    let offset = 0;
+    for (const l of lines) {
+      offset += l.length + 1;
+    }
+    // Remove trailing newline if source didn't end with one
+    return offset > 0 ? offset - 1 : 0;
+  }
+  return nextStart - 1; // subtract the LF between this line and the next
+}
+
+/**
+ * Compute a SHA-256 lowercase hex fingerprint of the source span.
+ * Line endings are canonicalized (CRLF/CR → LF) before hashing.
+ */
+export function computeSpanFingerprint(
+  lines: string[],
+  startOffset: number,
+  endOffset: number,
+): string {
+  const source = lines.join('\n');
+  const content = source.slice(startOffset, endOffset);
+  const canonical = content.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  return createHash('sha256').update(canonical).digest('hex');
 }
