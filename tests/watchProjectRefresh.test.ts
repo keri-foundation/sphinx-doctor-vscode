@@ -87,7 +87,7 @@ function testConfig(overrides: Partial<Record<string, unknown>> = {}) {
     discoveryEnabled: false, discoveryIncludeLowConfidence: false,
     discoveryInventoryWorkspaceFolderNames: [], discoveryExcludeWorkspaceFolders: [],
     enrichmentEnabled: true, enrichmentAutoRun: false,
-    logLevel: 'info', watchDebounceMs: 1500, refreshDebounceMs: 1500,
+    watchDebounceMs: 1500, refreshDebounceMs: 1500,
     directRunEnabled: false,
     sphinxCommand: 'sphinx-build', sphinxBuilder: 'html',
     sphinxSourceDir: '.', sphinxOutputDir: '_build',
@@ -110,7 +110,7 @@ const SAMPLE_PROJECT = {
 
 function fakeLogger() {
   const m: string[] = [];
-  return { m, debug(s: string) { m.push(`debug:${s}`); }, info(s: string) { m.push(`info:${s}`); }, warn(s: string) { m.push(`warn:${s}`); }, error(s: string) { m.push(`error:${s}`); }, setLevel(_l: string): void {}, show(_p?: boolean): void {} };
+  return { m, debug(e: unknown) { m.push(`debug:${JSON.stringify(e)}`); }, info(e: unknown) { m.push(`info:${JSON.stringify(e)}`); }, warn(e: unknown) { m.push(`warn:${JSON.stringify(e)}`); }, error(e: unknown) { m.push(`error:${JSON.stringify(e)}`); }, show(_p?: boolean): void {} };
 }
 
 function fakeDiagnosticsState() {
@@ -187,7 +187,7 @@ test('setProjectStatus records status in diagnostics state', async () => {
   runner.setProjectStatus('proj-a', 'all good');
 
   assert.equal(d.diagState.statuses.get('proj-a'), 'all good');
-  assert.ok(d.logger.m.some((e: string) => e.includes('Project proj-a: all good')));
+  assert.ok(d.logger.m.some((e: string) => e.includes('project.refresh.status') && e.includes('proj-a') && e.includes('all good')));
 });
 
 test('selectCandidate returns undefined when no mirror or inventory artifacts exist', async () => {

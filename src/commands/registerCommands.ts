@@ -21,6 +21,7 @@ import {
   selectMergedProject,
 } from './projectSelection';
 import { runSafely } from './runSafely';
+import { SphinxDoctorLogger } from '../logging/extensionLogger';
 import { runSphinxBuildDirect } from './directRun';
 import {
   type CommandDependencies,
@@ -107,10 +108,13 @@ export function registerCommands(
           result.diagnosticCount,
           buildSelfTestStatusTooltip(targetUri.toString(), result.diagnosticCount),
         );
-        dependencies.logger.info(
-          `Self-test diagnostic published: target=${targetUri.toString()} diagnostics=${result.diagnosticCount}.`,
-        );
-        dependencies.logger.info('Self-test diagnostic collection update completed.');
+        dependencies.logger.info({
+          name: SphinxDoctorLogger.LogEvents.COMMAND_SELF_TEST_PUBLISHED,
+          fields: { diagnosticCount: result.diagnosticCount },
+        });
+        dependencies.logger.info({
+          name: SphinxDoctorLogger.LogEvents.COMMAND_SELF_TEST_COMPLETED,
+        });
         void vscode.window.showInformationMessage(SELF_TEST_STATUS_TEXT);
       });
     }),
@@ -154,7 +158,9 @@ export function registerCommands(
           'keripy',
         ).fsPath;
 
-        dependencies.logger.info(`Loading fixture diagnostics: ${diagnosticsUri.fsPath}`);
+        dependencies.logger.info({
+          name: SphinxDoctorLogger.LogEvents.COMMAND_FIXTURE_LOADING,
+        });
 
         await loadAndPublish(context, diagnosticsUri, dependencies, {
           fixtureSourceRoot,
@@ -278,7 +284,9 @@ export function registerCommands(
         clearPublishedDiagnostics(dependencies.collection);
         dependencies.publicationIndex.clear();
         dependencies.watchMode?.noteManualClear();
-        dependencies.logger.info('Cleared Sphinx Doctor diagnostics.');
+        dependencies.logger.info({
+          name: SphinxDoctorLogger.LogEvents.COMMAND_DIAGNOSTICS_CLEARED,
+        });
         void vscode.window.showInformationMessage('Sphinx Doctor diagnostics cleared.');
       });
     }),
@@ -314,7 +322,9 @@ export function registerCommands(
         const document = await vscode.workspace.openTextDocument(reportUri);
         const reportLocation = reportUri.fsPath || reportUri.toString();
 
-        dependencies.logger.info(`Saved troubleshoot report: ${reportLocation}`);
+        dependencies.logger.info({
+          name: SphinxDoctorLogger.LogEvents.COMMAND_TROUBLESHOOT_SAVED,
+        });
         await vscode.window.showTextDocument(document, { preview: false });
         vscode.window.setStatusBarMessage(
           `Sphinx Doctor troubleshoot report saved: ${path.basename(reportLocation)}`,

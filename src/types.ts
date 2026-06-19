@@ -150,7 +150,6 @@ export interface ExtensionConfig {
   refreshAutoRunOnStartup: boolean;
   refreshAutoRunOnSave: boolean;
   refreshDebounceMs: number;
-  logLevel: SphinxDoctorLogLevel;
   directRunEnabled: boolean;
   sphinxCommand: string;
   sphinxBuilder: string;

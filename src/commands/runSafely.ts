@@ -11,7 +11,10 @@ export async function runSafely(
     await operation();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    logger.error(`${label} failed: ${message}`);
+    logger.error({
+      name: SphinxDoctorLogger.LogEvents.COMMAND_FAILED,
+      fields: { label, errorMessage: message },
+    });
     void vscode.window.showErrorMessage(`Sphinx Doctor failed: ${message}`);
   }
 }

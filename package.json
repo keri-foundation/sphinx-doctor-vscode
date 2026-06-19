@@ -297,17 +297,6 @@
           "description": "Debounce delay for save-triggered project refresh. Separate from diagnostics file watcher debounce.",
           "minimum": 100
         },
-        "sphinxDoctor.logLevel": {
-          "type": "string",
-          "enum": [
-            "debug",
-            "info",
-            "warn",
-            "error"
-          ],
-          "default": "info",
-          "description": "Log level for the Sphinx Doctor output channel."
-        },
         "sphinxDoctor.directRun.enabled": {
           "type": "boolean",
           "default": true,

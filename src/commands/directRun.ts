@@ -3,6 +3,7 @@ import path from 'node:path';
 import * as vscode from 'vscode';
 
 import { getExtensionConfig } from '../config/extensionConfig';
+import { SphinxDoctorLogger } from '../logging/extensionLogger';
 import { publishDiagnostics } from '../publication/publishDiagnostics';
 import {
   buildSphinxRunPlan,
@@ -30,7 +31,6 @@ export async function runSphinxBuildDirect(
   }
 
   const config = getExtensionConfig();
-  dependencies.logger.setLevel(config.logLevel);
 
   // Check if direct run is enabled
   const sphinxConfig: SphinxRunConfig = {
@@ -83,9 +83,10 @@ export async function runSphinxBuildDirect(
   sphinxBuildInProgress = true;
 
   try {
-    dependencies.logger.info(
-      `Running Sphinx build in workspace folder: ${workspaceFolderInfo.name} (${workspaceFolderInfo.fsPath})`,
-    );
+    dependencies.logger.info({
+      name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_BUILD_START,
+      fields: { workspaceFolder: workspaceFolderInfo.name },
+    });
 
     // Build run plan
     const plan = buildSphinxRunPlan({
@@ -94,9 +95,10 @@ export async function runSphinxBuildDirect(
       cwdWorkspaceFolder: workspaceFolderInfo.name,
     });
 
-    dependencies.logger.info(
-      `Sphinx build plan: command=${plan.command}, args=${plan.args.join(' ')}, cwd=${plan.cwd}`,
-    );
+    dependencies.logger.info({
+      name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_BUILD_PLAN,
+      fields: { command: plan.command, argCount: plan.args.length },
+    });
 
     // Run with progress
     const result = await vscode.window.withProgress(
@@ -110,20 +112,29 @@ export async function runSphinxBuildDirect(
       },
     );
 
-    dependencies.logger.info(
-      `Sphinx build completed: status=${result.status}, exitCode=${result.exitCode}, warningFileExists=${result.warningFileExists}`,
-    );
+    dependencies.logger.info({
+      name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_BUILD_COMPLETED,
+      fields: { status: result.status, exitCode: result.exitCode, warningFileExists: result.warningFileExists },
+    });
 
     if (result.stdout) {
-      dependencies.logger.info(`Sphinx stdout:\n${result.stdout}`);
+      dependencies.logger.info({
+        name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_BUILD_STDOUT,
+        fields: { stdout: result.stdout },
+      });
     }
     if (result.stderr) {
-      dependencies.logger.info(`Sphinx stderr:\n${result.stderr}`);
+      dependencies.logger.info({
+        name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_BUILD_STDERR,
+        fields: { stderr: result.stderr },
+      });
     }
 
     // Handle cancellation
     if (result.status === 'canceled') {
-      dependencies.logger.info('Sphinx build was canceled by user');
+      dependencies.logger.info({
+        name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_CANCELED,
+      });
       void vscode.window.showInformationMessage('Sphinx Doctor: Build canceled.');
       return;
     }
@@ -148,7 +159,9 @@ export async function runSphinxBuildDirect(
     const warningText = Buffer.from(warningFileContent).toString('utf8');
     const warningSummary = summarizeWarningFileContent(warningText);
 
-    dependencies.logger.info(`Parsing warnings from: ${plan.warningFile}`);
+    dependencies.logger.info({
+      name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_PARSE_START,
+    });
 
     const parseResult = await parseSphinxWarnings({
       warningFileContent: warningText,
@@ -156,18 +169,46 @@ export async function runSphinxBuildDirect(
       sourceWorkspaceFolder: workspaceFolderInfo.name,
     });
 
-    dependencies.logger.info(
-      `Sphinx Doctor run context: selectedWorkspaceFolder=${workspaceFolderInfo.name}; cwd=${plan.cwd}; command=${plan.command}; args=${plan.args.join(' ')}; warningFile=${plan.warningFile}; exists=${result.warningFileExists}; bytes=${warningSummary.byteLength}; lines=${warningSummary.lineCount}; first10=${warningSummary.firstTenLines}; docstring=${warningSummary.docstringWarningCount}; standard=${warningSummary.standardWarningCount}; global=${warningSummary.globalWarningCount}; parserRawLines=${parseResult.totalLines}; parsed=${parseResult.issues.length}; unparsed=${parseResult.unparsedCount}; mapped=${parseResult.issues.length}; unmapped=${parseResult.unmappedCount}; publishable=${parseResult.issues.length}; astDegraded=${parseResult.astDegraded}; unsafeDocstringFallback=${parseResult.unsafeDocstringFallbackCount}; suppressedNonDocstring=${parseResult.suppressedNonDocstringCount}.`,
-    );
+    dependencies.logger.info({
+      name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_PARSE_RESULT,
+      fields: {
+        workspaceFolder: workspaceFolderInfo.name,
+        command: plan.command,
+        bytes: warningSummary.byteLength,
+        lines: warningSummary.lineCount,
+        docstringWarnings: warningSummary.docstringWarningCount,
+        standardWarnings: warningSummary.standardWarningCount,
+        globalWarnings: warningSummary.globalWarningCount,
+        parserRawLines: parseResult.totalLines,
+        parsed: parseResult.issues.length,
+        unparsed: parseResult.unparsedCount,
+        unmapped: parseResult.unmappedCount,
+        astDegraded: parseResult.astDegraded,
+        unsafeDocstringFallback: parseResult.unsafeDocstringFallbackCount,
+        suppressedNonDocstring: parseResult.suppressedNonDocstringCount,
+      },
+    });
 
-    dependencies.logger.info(
-      `Parsed ${parseResult.issues.length} issues from ${parseResult.totalLines} lines (${parseResult.unmappedCount} unmapped, ${parseResult.unparsedCount} unparsed, ${parseResult.suppressedNonDocstringCount} non-docstring suppressed, ${parseResult.unsafeDocstringFallbackCount} unsafe docstring fallback retained)`,
-    );
+    dependencies.logger.info({
+      name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_PARSE_COUNTS,
+      fields: {
+        parsed: parseResult.issues.length,
+        totalLines: parseResult.totalLines,
+        unmapped: parseResult.unmappedCount,
+        unparsed: parseResult.unparsedCount,
+        suppressedNonDocstring: parseResult.suppressedNonDocstringCount,
+        unsafeDocstringFallback: parseResult.unsafeDocstringFallbackCount,
+      },
+    });
 
     if (parseResult.astDegraded) {
-      dependencies.logger.warn(
-        `Python docstring text mapper degraded; ${parseResult.unsafeDocstringFallbackCount} docstring warnings retained (not published to Problems — source docstring range could not be determined). ${parseResult.suppressedNonDocstringCount} non-docstring warnings also suppressed.`,
-      );
+      dependencies.logger.warn({
+        name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_PARSE_DEGRADED,
+        fields: {
+          unsafeDocstringFallback: parseResult.unsafeDocstringFallbackCount,
+          suppressedNonDocstring: parseResult.suppressedNonDocstringCount,
+        },
+      });
     }
 
     if (shouldTreatWarningFileAsEmpty(warningSummary) && parseResult.issues.length === 0) {
@@ -242,9 +283,19 @@ export async function runSphinxBuildDirect(
       },
     );
 
-    dependencies.logger.info(
-      `Direct-run diagnostics published for ${workspaceFolderInfo.name}: ${publishResult.issueCount} issues, ${publishResult.publishableBeforeFilter} publishable before filter, ${publishResult.publishedDiagnostics} published across ${publishResult.targetUriCount} target URIs; ${publishResult.filteredByMode} filtered by mode, ${publishResult.skippedIssues} skipped, ${publishResult.resolutionFailures} resolution failures${publishResult.skipReasons ? `; skip breakdown: not-publishable=${publishResult.skipReasons['not-publishable']}, mode-filtered=${publishResult.skipReasons['mode-filtered']}, no-target-uri=${publishResult.skipReasons['no-target-uri']}` : ''}. Warning file: ${plan.warningFile}.`,
-    );
+    dependencies.logger.info({
+      name: SphinxDoctorLogger.LogEvents.COMMAND_DIRECT_RUN_PUBLISHED,
+      fields: {
+        workspaceFolder: workspaceFolderInfo.name,
+        issueCount: publishResult.issueCount,
+        publishableBeforeFilter: publishResult.publishableBeforeFilter,
+        publishedDiagnostics: publishResult.publishedDiagnostics,
+        targetUriCount: publishResult.targetUriCount,
+        filteredByMode: publishResult.filteredByMode,
+        skippedIssues: publishResult.skippedIssues,
+        resolutionFailures: publishResult.resolutionFailures,
+      },
+    });
 
     const statusMessage =
       `Sphinx Doctor direct run: ${publishResult.issueCount} issues; ${publishResult.publishedDiagnostics} published in ${config.diagnosticsMode} mode.`;

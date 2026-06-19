@@ -97,7 +97,6 @@ export function buildTroubleshootReport(options: {
     `- Discovery enabled: ${options.config.discoveryEnabled}`,
     `- Enrichment enabled: ${options.config.enrichmentEnabled}`,
     `- Enrichment auto-run: ${options.config.enrichmentAutoRun}`,
-    `- Log level: ${options.config.logLevel}`,
     '',
     '## Diagnostics State',
     `- Last refresh reason: ${options.state.lastRefreshReason}`,

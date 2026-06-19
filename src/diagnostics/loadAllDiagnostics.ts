@@ -1,4 +1,4 @@
-import type { SphinxDoctorLogger } from '../logging/extensionLogger';
+import { SphinxDoctorLogger } from '../logging/extensionLogger';
 
 export interface LoadAllDiagnosticsSnapshot {
   discoveredProjectCount: number;
@@ -16,7 +16,7 @@ export interface LoadAllDiagnosticsWatchModeLike {
 
 export interface LoadAllDiagnosticsDependencies {
   watchMode?: LoadAllDiagnosticsWatchModeLike;
-  logger: Pick<SphinxDoctorLogger, 'info' | 'warn'>;
+  logger: SphinxDoctorLogger;
   showWarningMessage(message: string): void;
   showInformationMessage(message: string): void;
 }
@@ -47,9 +47,17 @@ export async function loadAllDiscoveredDiagnostics(
   const snapshot = dependencies.watchMode.getLastRefreshSnapshot();
   const message = buildLoadAllDiagnosticsStatusMessage(snapshot);
 
-  dependencies.logger.info(
-    `Load-all diagnostics completed: discovered=${snapshot.discoveredProjectCount}; known=${snapshot.knownProjectCount}; loaded=${snapshot.loadedProjectCount}; skipped=${snapshot.skippedProjectCount}; issues=${snapshot.issueCount}; published=${snapshot.publishedDiagnostics}.`,
-  );
+  dependencies.logger.info({
+    name: SphinxDoctorLogger.LogEvents.DIAGNOSTICS_LOAD_ALL,
+    fields: {
+      discovered: snapshot.discoveredProjectCount,
+      known: snapshot.knownProjectCount,
+      loaded: snapshot.loadedProjectCount,
+      skipped: snapshot.skippedProjectCount,
+      issues: snapshot.issueCount,
+      published: snapshot.publishedDiagnostics,
+    },
+  });
   dependencies.showInformationMessage(message);
   return snapshot;
 }

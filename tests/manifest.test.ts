@@ -43,7 +43,6 @@ test('extension manifest declares the stable sphinxDoctor settings surface', asy
     'sphinxDoctor.discovery.includeLowConfidence',
     'sphinxDoctor.discovery.inventoryWorkspaceFolderNames',
     'sphinxDoctor.discovery.excludeWorkspaceFolders',
-    'sphinxDoctor.logLevel',
   ]) {
     assert.equal(Object.prototype.hasOwnProperty.call(properties, key), true, key);
   }

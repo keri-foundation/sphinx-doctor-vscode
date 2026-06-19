@@ -13,7 +13,6 @@ import {
   ExtensionConfig,
   normalizeDiagnosticMode,
   ProjectRefreshConfig,
-  SphinxDoctorLogLevel,
 } from '../types';
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -125,13 +124,6 @@ export function coerceProjects(value: unknown): ConfiguredProject[] {
     .filter((entry): entry is ConfiguredProject => entry !== undefined);
 }
 
-function coerceLogLevel(value: unknown): SphinxDoctorLogLevel {
-  if (value === 'debug' || value === 'info' || value === 'warn' || value === 'error') {
-    return value;
-  }
-  return 'info';
-}
-
 export function projectLabel(project: ConfiguredProject): string {
   return project.label ?? project.id;
 }
@@ -188,7 +180,6 @@ export function getExtensionConfig(): ExtensionConfig {
     refreshAutoRunOnStartup: asBoolean(configuration.get('refresh.autoRunOnStartup')) ?? false,
     refreshAutoRunOnSave: asBoolean(configuration.get('refresh.autoRunOnSave')) ?? false,
     refreshDebounceMs: coerceRefreshDebounceMs(configuration.get('refresh.debounceMs')),
-    logLevel: coerceLogLevel(configuration.get('logLevel', 'info')),
     directRunEnabled: asBoolean(configuration.get('directRun.enabled')) ?? true,
     sphinxCommand: asString(configuration.get('sphinx.command')) ?? 'sphinx-build',
     sphinxBuilder: asString(configuration.get('sphinx.builder')) ?? 'dirhtml',

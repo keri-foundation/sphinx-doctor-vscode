@@ -1,5 +1,28 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { test, after } from 'node:test';
+
+// Stub vscode before imports that transitively reach extensionLogger
+const moduleLoader = require('node:module') as typeof import('node:module') & {
+  _load?: (request: string, parent: NodeModule | undefined, isMain: boolean) => unknown;
+};
+const originalLoad = moduleLoader._load;
+assert.ok(originalLoad);
+
+let stubs: Record<string, unknown> = {};
+moduleLoader._load = ((request: string, parent: NodeModule | undefined, isMain: boolean) => {
+  if (stubs[request]) return stubs[request];
+  return originalLoad(request, parent, isMain);
+}) as typeof originalLoad;
+
+stubs['vscode'] = {
+  window: { createOutputChannel: () => ({
+    name: 'Sphinx Doctor', logLevel: 3,
+    trace() {}, debug() {}, info() {}, warn() {}, error() {},
+    show() {}, dispose() {}, append() {}, appendLine() {}, replace() {}, clear() {}, hide() {},
+  })},
+};
+
+after(() => { moduleLoader._load = originalLoad; });
 
 import {
   buildLoadAllDiagnosticsStatusMessage,
@@ -44,7 +67,7 @@ test('load-all diagnostics uses watch-mode batch loading and avoids project sele
     logger: {
       info: () => {},
       warn: () => {},
-    },
+    } as unknown as import('../src/logging/extensionLogger.js').SphinxDoctorLogger,
     showWarningMessage(message) {
       warningMessages.push(message);
     },
@@ -78,7 +101,7 @@ test('load-all diagnostics warns when watch mode is unavailable', async () => {
     logger: {
       info: () => {},
       warn: () => {},
-    },
+    } as unknown as import('../src/logging/extensionLogger.js').SphinxDoctorLogger,
     showWarningMessage(message) {
       warningMessages.push(message);
     },

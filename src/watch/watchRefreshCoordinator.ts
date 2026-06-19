@@ -41,8 +41,14 @@ function logDiscoveryDecisions(
   }>,
 ): void {
   for (const decision of decisions) {
-    const prefix = decision.outcome === 'discovered' ? 'Discovery include' : 'Discovery skip';
-    logger.info(`${prefix} ${decision.workspaceFolderName}: ${decision.reason}.`);
+    logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_DISCOVERY_DECISION,
+      fields: {
+        workspaceFolder: decision.workspaceFolderName,
+        outcome: decision.outcome,
+        reason: decision.reason,
+      },
+    });
   }
 }
 
@@ -55,12 +61,7 @@ function toWorkspaceFolderInfo(
   }));
 }
 
-const NOOP_PUBLISH_LOGGER = {
-  debug: () => {},
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-};
+
 
 export interface WatchRefreshCoordinatorDeps {
   collection: vscode.DiagnosticCollection;
@@ -100,19 +101,26 @@ export class WatchRefreshCoordinator {
 
   async refreshAll(reason: string, loadDiagnostics = true): Promise<void> {
     const config = getExtensionConfig();
-    this.deps.logger.setLevel(config.logLevel);
     const workspaceFolders = toWorkspaceFolderInfo(vscode.workspace.workspaceFolders);
 
-    this.deps.logger.info(
-      `Watch refresh requested (${reason}): workspace folders [${workspaceFolders.map((f) => f.name).join(', ') || 'none'}].`,
-    );
-    this.deps.logger.info(
-      `Configured projects (${config.projects.length}): [${config.projects.map((p) => p.id).join(', ') || 'none'}].`,
-    );
+    this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_REFRESH_REQUESTED,
+      fields: {
+        reason,
+        workspaceFolderCount: workspaceFolders.length,
+      },
+    });
+    this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_REFRESH_CONFIGURED,
+      fields: { configuredCount: config.projects.length },
+    });
 
     if (!hasOpenWorkspaceFolders(workspaceFolders)) {
       this.deps.publicationIndex.clear(this.deps.collection);
-      this.deps.logger.info(`Watch refresh skipped (${reason}): no workspace folders.`);
+      this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_REFRESH_SKIPPED_NO_WORKSPACE,
+      fields: { reason },
+    });
       this.deps.diagnosticsState.clear();
       this.deps.onAggregateChanged({
         projectCount: 0,
@@ -161,19 +169,26 @@ export class WatchRefreshCoordinator {
       decision.project ? [decision.project] : [],
     );
 
-    this.deps.logger.info(
-      `Discovered projects (${discoveredProjects.length}): [${discoveredProjects.map((p) => p.id).join(', ') || 'none'}].`,
-    );
+    this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_DISCOVERY_COMPLETED,
+      fields: { discoveredCount: discoveredProjects.length },
+    });
 
     const projects = mergeProjects(config.projects, discoveredProjects);
 
-    this.deps.logger.info(
-      `Known projects (${projects.length}): [${projects.map((p) => p.id).join(', ') || 'none'}].`,
-    );
+    this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_PROJECTS_MERGED,
+      fields: { knownCount: projects.length },
+    });
 
-    this.deps.logger.info(
-      `Watch refresh started (${reason}): ${projects.length} projects, ${discoveredProjects.length} discovered.`,
-    );
+    this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_REFRESH_STARTED,
+      fields: {
+        reason,
+        projectCount: projects.length,
+        discoveredCount: discoveredProjects.length,
+      },
+    });
 
     await this.deps.syncWatchers(projects, workspaceFolders);
     this.deps.onRefreshBookkeeping({
@@ -226,7 +241,10 @@ export class WatchRefreshCoordinator {
         const message = error instanceof Error ? error.message : String(error);
         this.deps.onProjectError(message);
         this.deps.projectRunner.setProjectStatus(project.id, `error: ${message}`);
-        this.deps.logger.error(`Watch refresh failed for ${project.id}: ${message}`);
+        this.deps.logger.error({
+        name: SphinxDoctorLogger.LogEvents.WATCH_REFRESH_FAILED,
+        fields: { projectId: project.id, errorMessage: message },
+      });
       }
     }
 
@@ -270,7 +288,7 @@ export class WatchRefreshCoordinator {
         defaultRepoRoot: entry.defaultRepoRoot,
         fixtureSourceRoot: entry.fixtureSourceRoot,
         allowFirstFolderFallback: entry.allowFirstFolderFallback,
-        logger: NOOP_PUBLISH_LOGGER,
+        logger: this.deps.logger,
       });
 
       this.deps.diagnosticsState.setProjectPublication(entry.project.id, {
@@ -300,15 +318,29 @@ export class WatchRefreshCoordinator {
     });
 
     if (entries.length > 0) {
-      this.deps.logger.info(
-        `Loaded diagnostics files: [${this.deps.diagnosticsState.getProjectPublications().size}].`,
-      );
+      this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_REFRESH_LOADED,
+    });
     } else {
-      this.deps.logger.warn('No diagnostics files were loaded for any known project during this refresh.');
+      this.deps.logger.warn({
+      name: SphinxDoctorLogger.LogEvents.WATCH_REFRESH_NO_DIAGNOSTICS,
+    });
     }
-    this.deps.logger.info(
-      `Watch refresh completed (${reason}): mode=${config.diagnosticsMode}; loaded ${entries.length} files, ${publishResult.issueCount} issues, ${publishResult.publishableBeforeFilter} publishable before filter, ${publishResult.publishedDiagnostics} published diagnostics across ${publishResult.targetUriCount} target URIs, ${publishResult.filteredByMode} filtered by mode, ${publishResult.skippedIssues} skipped, ${publishResult.resolutionFailures} resolution failures.`,
-    );
+    this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_REFRESH_COMPLETED,
+      fields: {
+        reason,
+        mode: config.diagnosticsMode,
+        loadedFiles: entries.length,
+        issueCount: publishResult.issueCount,
+        publishableBeforeFilter: publishResult.publishableBeforeFilter,
+        publishedDiagnostics: publishResult.publishedDiagnostics,
+        targetUriCount: publishResult.targetUriCount,
+        filteredByMode: publishResult.filteredByMode,
+        skippedIssues: publishResult.skippedIssues,
+        resolutionFailures: publishResult.resolutionFailures,
+      },
+    });
   }
 
   resetRefreshTrigger(debounceMs: number): void {
@@ -345,7 +377,9 @@ export class WatchRefreshCoordinator {
     }
 
     if (vscode.workspace.isTrusted !== true) {
-      this.deps.logger.info('Skipping startup refreshes because the workspace is not trusted.');
+      this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_STARTUP_SKIP_UNTRUSTED,
+    });
       return;
     }
 
@@ -366,13 +400,22 @@ export class WatchRefreshCoordinator {
     const projects = await this.resolveKnownProjects(config, workspaceFolders);
     const project = projects.find((entry) => entry.id === projectId);
     if (!project) {
-      this.deps.logger.warn(`Skipping refresh-on-save for ${projectId}: project is no longer known.`);
+      this.deps.logger.warn({
+      name: SphinxDoctorLogger.LogEvents.WATCH_SAVE_SKIP_UNKNOWN,
+      fields: { projectId },
+    });
       return;
     }
 
-    this.deps.logger.info(`Starting save-triggered refresh for ${project.id}: ${reason}.`);
+    this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_SAVE_STARTED,
+      fields: { projectId: project.id, reason },
+    });
     await this.runProjectRefreshLifecycle(project, workspaceFolders, `refresh-on-save (${reason})`);
-    this.deps.logger.info(`Completed save-triggered refresh for ${project.id}: ${reason}.`);
+    this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_SAVE_COMPLETED,
+      fields: { projectId: project.id, reason },
+    });
   }
 
   async runProjectRefreshLifecycle(
@@ -381,7 +424,10 @@ export class WatchRefreshCoordinator {
     reason: string,
   ): Promise<void> {
     if (!this.projectRefreshSingleFlight.tryStart(project.id)) {
-      this.deps.logger.info(`Skipping ${reason} for ${project.id} because a refresh is already running.`);
+      this.deps.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_SINGLE_FLIGHT_SKIP,
+      fields: { projectId: project.id, reason },
+    });
       return;
     }
 

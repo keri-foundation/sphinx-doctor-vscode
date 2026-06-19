@@ -14,8 +14,6 @@ import {
 } from '../types';
 import { resolveIssueFilePath } from '../workspace/inventoryCandidates';
 
-export type PublishLogger = Pick<SphinxDoctorLogger, 'debug' | 'info' | 'warn' | 'error'>;
-
 type PublishedTargetsByProject = Map<string, Map<string, vscode.Uri>>;
 
 interface PublicationIndexLike {
@@ -38,7 +36,7 @@ export interface PublishOptions {
   fixtureSourceRoot?: string;
   allowFirstFolderFallback?: boolean;
   applyDiagnosticModeFilter?: boolean;
-  logger: PublishLogger;
+  logger: SphinxDoctorLogger;
 }
 
 export type SkipReason =
@@ -171,16 +169,23 @@ function collectDiagnostics(
       if (skipSamples['no-target-uri'].length < 5) {
         skipSamples['no-target-uri'].push(issue);
       }
-      options.logger.warn(
-        `Skipping ${issue.id}: ${resolution.reason ?? 'Issue path could not be resolved.'}`,
-      );
+      options.logger.warn({
+        name: SphinxDoctorLogger.LogEvents.PUBLICATION_ISSUE_SKIPPED,
+        fields: { issueId: issue.id, reason: resolution.reason ?? 'Issue path could not be resolved.' },
+      });
       continue;
     }
 
     if (resolution.reason) {
-      options.logger.info(`Issue ${issue.id} resolved with ${resolution.strategy}: ${resolution.reason}`);
+      options.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PUBLICATION_ISSUE_RESOLVED,
+        fields: { issueId: issue.id, strategy: resolution.strategy, reason: resolution.reason },
+      });
     } else {
-      options.logger.debug(`Issue ${issue.id} resolved with ${resolution.strategy}.`);
+      options.logger.debug({
+        name: SphinxDoctorLogger.LogEvents.PUBLICATION_ISSUE_RESOLVED,
+        fields: { issueId: issue.id, strategy: resolution.strategy },
+      });
     }
 
     const diagnostic = new vscode.Diagnostic(
@@ -208,9 +213,14 @@ function collectDiagnostics(
       const samples = skipSamples[reason];
       if (samples.length > 0) {
         for (const sample of samples) {
-          options.logger.info(
-            `Direct-run skipped issue sample (${reason}): id=${sample.id}; category=${sample.category}; repoRelativePath=${sample.repoRelativePath}; sourceWorkspaceFolder=${sample.sourceWorkspaceFolder}; sourceRange=${sample.sourceRange ? `L${sample.sourceRange.startLine}` : 'null'}; publishDiagnostic=${sample.publishDiagnostic}`,
-          );
+          options.logger.info({
+            name: SphinxDoctorLogger.LogEvents.PUBLICATION_SKIP_SAMPLE,
+            fields: {
+              skipReason: reason,
+              issueId: sample.id,
+              category: sample.category,
+            },
+          });
         }
       }
     }

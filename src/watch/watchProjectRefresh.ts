@@ -140,9 +140,15 @@ export class WatchProjectRefreshRunner {
         contract.issues,
         config.diagnosticsMode,
       ).publishableBeforeFilter;
-      this.deps.logger.info(
-        `Watch mode loaded enriched diagnostics for ${project.id}: ${selected.candidate.filePath}; issues=${contract.issues.length}; publishableBeforeFilter=${publishableIssueCount}; mode=${config.diagnosticsMode}.`,
-      );
+      this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_LOADED,
+        fields: {
+          projectId: project.id,
+          issues: contract.issues.length,
+          publishableBeforeFilter: publishableIssueCount,
+          mode: config.diagnosticsMode,
+        },
+      });
       return {
         project,
         projectKey: project.id,
@@ -180,18 +186,25 @@ export class WatchProjectRefreshRunner {
         workspaceFolders,
         rawIssuesPath: selected.candidate.filePath,
       });
-      this.deps.logger.info(
-        `Watch mode auto-enriching ${project.id}: raw ${plan.rawIssuesPath}; archive ${plan.archiveOutputPath}; latest ${plan.latestOutputPath}.`,
-      );
+      this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_AUTO_ENRICH_START,
+        fields: { projectId: project.id },
+      });
       const result = await runEnrichmentPlan(plan);
       const contract = await loadDiagnosticsFromPath(result.plan.latestOutputPath);
       const publishableIssueCount = summarizeDiagnosticMode(
         contract.issues,
         config.diagnosticsMode,
       ).publishableBeforeFilter;
-      this.deps.logger.info(
-        `Watch mode auto-enriched ${project.id} to ${result.plan.latestOutputPath}; issues=${contract.issues.length}; publishableBeforeFilter=${publishableIssueCount}; mode=${config.diagnosticsMode}.`,
-      );
+      this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_AUTO_ENRICH_COMPLETE,
+        fields: {
+          projectId: project.id,
+          issues: contract.issues.length,
+          publishableBeforeFilter: publishableIssueCount,
+          mode: config.diagnosticsMode,
+        },
+      });
       return {
         project,
         projectKey: project.id,
@@ -217,7 +230,10 @@ export class WatchProjectRefreshRunner {
 
   setProjectStatus(projectId: string, status: string): void {
     this.deps.diagnosticsState.setProjectStatus(projectId, status);
-    this.deps.logger.info(`Project ${projectId}: ${status}`);
+    this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_STATUS,
+        fields: { projectId, status },
+      });
   }
 
   async selectCandidate(
@@ -274,11 +290,15 @@ export class WatchProjectRefreshRunner {
         workspaceFolders,
         refreshCategory,
       });
-      this.deps.logger.info(
-        `Running ${reason} for ${project.id} with ${refreshPlan.command} ${refreshPlan.args.join(' ')} in ${refreshPlan.cwd}.`,
-      );
+      this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_RUNNING,
+        fields: { projectId: project.id, reason, command: refreshPlan.command },
+      });
       const refreshResult = await runRefreshPlan(refreshPlan);
-      this.deps.logger.info(`${reason} finished for ${project.id} with exit code ${refreshResult.exitCode}.`);
+      this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_FINISHED,
+        fields: { projectId: project.id, reason, exitCode: refreshResult.exitCode },
+      });
 
       if (refreshResult.exitCode !== 0) {
         const detail =
@@ -320,7 +340,10 @@ export class WatchProjectRefreshRunner {
         });
         if (promotion.drift.detected) {
           const warning = `${formatRefreshScopeDriftWarning(projectLabel(project), promotion.drift)} Refreshed run preserved at ${refreshed.candidate.filePath}.`;
-          this.deps.logger.warn(warning);
+          this.deps.logger.warn({
+          name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_DRIFT_WARNING,
+          fields: { projectId: project.id },
+        });
           this.setProjectStatus(project.id, warning);
           void vscode.window.showWarningMessage(warning);
           return;
@@ -364,9 +387,10 @@ export class WatchProjectRefreshRunner {
         workspaceFolders,
         rawIssuesPath: refreshed.candidate.filePath,
       });
-      this.deps.logger.info(
-        `Enriching refreshed diagnostics for ${project.id}: raw ${enrichmentPlan.rawIssuesPath}; latest ${enrichmentPlan.latestOutputPath}.`,
-      );
+      this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_ENRICHING,
+        fields: { projectId: project.id },
+      });
       await runEnrichmentPlan(enrichmentPlan, { promoteLatest: false });
       const promotion = await evaluateRefreshBaselinePromotion({
         currentBaselinePath: enrichmentPlan.latestOutputPath,
@@ -375,7 +399,10 @@ export class WatchProjectRefreshRunner {
       });
       if (promotion.drift.detected) {
         const warning = `${formatRefreshScopeDriftWarning(projectLabel(project), promotion.drift)} Refreshed run preserved at ${enrichmentPlan.archiveOutputPath}.`;
-        this.deps.logger.warn(warning);
+        this.deps.logger.warn({
+          name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_DRIFT_WARNING,
+          fields: { projectId: project.id },
+        });
         this.setProjectStatus(project.id, warning);
         void vscode.window.showWarningMessage(warning);
         return;
@@ -398,7 +425,10 @@ export class WatchProjectRefreshRunner {
       const message = error instanceof Error ? error.message : String(error);
       this.deps.onError(message);
       this.setProjectStatus(project.id, `error: ${message}`);
-      this.deps.logger.error(`${reason} failed for ${project.id}: ${message}`);
+      this.deps.logger.error({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_REFRESH_FAILED,
+        fields: { projectId: project.id, reason, errorMessage: message },
+      });
     }
   }
 
@@ -411,14 +441,23 @@ export class WatchProjectRefreshRunner {
       const mirrorLatestUri = vscode.Uri.file(
         path.resolve(sourceFolder.fsPath, project.repoRoot ?? '.', project.mirrorRoot ?? '.sphinx-diagnostics', 'latest.json'),
       );
-      this.deps.logger.info(`Checking mirror latest.json for ${project.id}: ${mirrorLatestUri.fsPath}.`);
+      this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_MIRROR_CHECK,
+        fields: { projectId: project.id },
+      });
       try {
         await vscode.workspace.fs.stat(mirrorLatestUri);
         const kind = await inspectDiagnosticsFile(mirrorLatestUri.fsPath);
-        this.deps.logger.info(`Mirror artifact kind for ${project.id}: ${kind}.`);
+        this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_MIRROR_KIND,
+        fields: { projectId: project.id, kind },
+      });
         if (kind === 'enriched') {
           const stat = await vscode.workspace.fs.stat(mirrorLatestUri);
-          this.deps.logger.info(`Selected mirror artifact for ${project.id}: ${mirrorLatestUri.fsPath}.`);
+          this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_MIRROR_SELECTED,
+        fields: { projectId: project.id },
+      });
           return {
             candidate: {
               uri: mirrorLatestUri,
@@ -432,7 +471,10 @@ export class WatchProjectRefreshRunner {
           };
         }
       } catch {
-        this.deps.logger.info(`Mirror latest.json missing for ${project.id}: ${mirrorLatestUri.fsPath}.`);
+        this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_MIRROR_MISSING,
+        fields: { projectId: project.id },
+      });
       }
     }
 
@@ -459,9 +501,10 @@ export class WatchProjectRefreshRunner {
         sourceRoot,
       });
       if (!compatibility.compatible) {
-        this.deps.logger.warn(
-          `Skipping incompatible inventory candidate for ${project.id}: ${candidate.filePath}. ${compatibility.reason ?? 'Binding mismatch.'}`,
-        );
+        this.deps.logger.warn({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_CANDIDATE_INCOMPATIBLE,
+        fields: { projectId: project.id },
+      });
         continue;
       }
       compatibleCandidates.push(candidate);
@@ -487,9 +530,10 @@ export class WatchProjectRefreshRunner {
     }
 
     const kind = await inspectDiagnosticsFile(selection.selected.filePath);
-    this.deps.logger.info(
-      `Selected inventory artifact for ${project.id}: ${selection.selected.filePath}; kind=${kind}.`,
-    );
+    this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_CANDIDATE_SELECTED,
+        fields: { projectId: project.id, kind },
+      });
     return {
       candidate: selection.selected,
       kind,
@@ -506,18 +550,20 @@ export class WatchProjectRefreshRunner {
     for (const searchTarget of inventorySearchTargets(project)) {
       const inventoryFolder = findWorkspaceFolderByName(workspaceFolders, searchTarget.workspaceFolderName);
       if (!inventoryFolder) {
-        this.deps.logger.warn(
-          `Inventory workspace folder ${searchTarget.workspaceFolderName} could not be resolved for ${project.id}.`,
-        );
+        this.deps.logger.warn({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_NO_CANDIDATE,
+        fields: { projectId: project.id },
+      });
         continue;
       }
 
       for (const inventorySearchGlob of searchTarget.globs) {
         const relativePattern = new vscode.RelativePattern(inventoryFolder.fsPath, inventorySearchGlob);
         const matches = await vscode.workspace.findFiles(relativePattern);
-        this.deps.logger.info(
-          `Searching inventory glob for ${project.id}: ${searchTarget.workspaceFolderName}:${inventorySearchGlob} -> ${matches.length} match(es).`,
-        );
+        this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_CANDIDATE_SEARCH,
+        fields: { projectId: project.id, matchCount: matches.length },
+      });
         for (const match of matches) {
           foundUris.set(match.toString(), match);
           uriOrigins.set(match.toString(), searchTarget.workspaceFolderName);
@@ -538,9 +584,10 @@ export class WatchProjectRefreshRunner {
       });
     }
 
-    this.deps.logger.info(
-      `Inventory candidates for ${project.id}: ${candidates.length > 0 ? candidates.map((candidate) => candidate.filePath).join(', ') : 'none'}.`,
-    );
+    this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_CANDIDATES,
+        fields: { projectId: project.id, candidateCount: candidates.length },
+      });
 
     return candidates;
   }
@@ -613,9 +660,10 @@ export class WatchProjectRefreshRunner {
   ): Promise<{ candidate: DiscoveredInventoryCandidate; kind: 'enriched' | 'raw' | 'unknown' } | undefined> {
     const inventoryFolder = findWorkspaceFolderByName(workspaceFolders, project.inventoryWorkspaceFolder);
     if (!inventoryFolder) {
-      this.deps.logger.warn(
-        `Inventory workspace folder ${project.inventoryWorkspaceFolder} could not be resolved for ${project.id} during auto refresh.`,
-      );
+      this.deps.logger.warn({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_NO_CANDIDATE,
+        fields: { projectId: project.id },
+      });
       return undefined;
     }
 
@@ -651,9 +699,10 @@ export class WatchProjectRefreshRunner {
         sourceRoot,
       });
       if (!compatibility.compatible) {
-        this.deps.logger.warn(
-          `Skipping refreshed diagnostics candidate for ${project.id}: ${candidate.filePath}. ${compatibility.reason ?? 'Binding mismatch.'}`,
-        );
+        this.deps.logger.warn({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_CANDIDATE_INCOMPATIBLE,
+        fields: { projectId: project.id },
+      });
         continue;
       }
       compatible.push(candidate);
@@ -665,9 +714,10 @@ export class WatchProjectRefreshRunner {
     }
 
     const kind = await inspectDiagnosticsFile(selected.filePath);
-    this.deps.logger.info(
-      `Selected refreshed diagnostics artifact for ${project.id}: ${selected.filePath}; kind=${kind}.`,
-    );
+    this.deps.logger.info({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_CANDIDATE_SELECTED,
+        fields: { projectId: project.id, kind },
+      });
     return {
       candidate: selected,
       kind,

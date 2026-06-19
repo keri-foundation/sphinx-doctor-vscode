@@ -56,8 +56,14 @@ function logDiscoveryDecisions(
   }>,
 ): void {
   for (const decision of decisions) {
-    const prefix = decision.outcome === 'discovered' ? 'Discovery include' : 'Discovery skip';
-    logger.info(`${prefix} ${decision.workspaceFolderName}: ${decision.reason}.`);
+    logger.info({
+      name: SphinxDoctorLogger.LogEvents.PROJECT_SELECTION_DISCOVERY_DECISION,
+      fields: {
+        workspaceFolder: decision.workspaceFolderName,
+        outcome: decision.outcome,
+        reason: decision.reason,
+      },
+    });
   }
 }
 
@@ -103,9 +109,10 @@ async function selectInventoryCandidateInteractively(
     return undefined;
   }
 
-  logger.warn(
-    `Inventory discovery for ${project.id} is ambiguous across ${selection.ambiguous.length} candidates; asking the user to choose.`,
-  );
+  logger.warn({
+    name: SphinxDoctorLogger.LogEvents.PROJECT_SELECTION_AMBIGUOUS,
+    fields: { projectId: project.id, ambiguousCount: selection.ambiguous.length },
+  });
 
   const picked = await vscode.window.showQuickPick(
     selection.ambiguous.map((candidate) => ({
@@ -195,9 +202,10 @@ async function filterCompatibleCandidates(
 ): Promise<DiscoveredInventoryCandidate[]> {
   const sourceRoot = projectSourceRoot(project, workspaceFolders);
   if (!sourceRoot) {
-    logger.warn(
-      `Source workspace folder ${project.sourceWorkspaceFolder} could not be resolved for ${project.id}; no shared inventory candidate will be bound automatically.`,
-    );
+    logger.warn({
+      name: SphinxDoctorLogger.LogEvents.PROJECT_SELECTION_SOURCE_MISSING,
+      fields: { projectId: project.id, sourceWorkspaceFolder: project.sourceWorkspaceFolder },
+    });
     return [];
   }
 
@@ -209,9 +217,10 @@ async function filterCompatibleCandidates(
       sourceRoot,
     });
     if (!compatibility.compatible) {
-      logger.warn(
-        `Skipping inventory candidate for ${project.id}: ${candidate.filePath}. ${compatibility.reason ?? 'Binding mismatch.'}`,
-      );
+      logger.warn({
+        name: SphinxDoctorLogger.LogEvents.PROJECT_SELECTION_INCOMPATIBLE,
+        fields: { projectId: project.id, reason: compatibility.reason ?? 'Binding mismatch.' },
+      });
       continue;
     }
     compatible.push(candidate);
@@ -238,9 +247,10 @@ export async function resolveProjectDiagnosticsFileFromSearchTargets(
     discovered.length > 0 &&
     freshCandidates.length === 0
   ) {
-    logger.warn(
-      `Ignoring ${discovered.length} stale diagnostics candidates for ${project.id} because they predate the current refresh run.`,
-    );
+    logger.warn({
+      name: SphinxDoctorLogger.LogEvents.PROJECT_SELECTION_STALE,
+      fields: { projectId: project.id, staleCount: discovered.length },
+    });
   }
   const candidates = await filterCompatibleCandidates(project, freshCandidates, workspaceFolders, logger);
   if (candidates.length === 0) {
@@ -256,12 +266,16 @@ export async function resolveProjectDiagnosticsFileFromSearchTargets(
     return undefined;
   }
 
-  logger.info(
-    `Selected project ${project.id} from ${project.sourceWorkspaceFolder}; inventory root ${selected.workspaceFolderName}; picked ${selected.filePath}.`,
-  );
+  logger.info({
+    name: SphinxDoctorLogger.LogEvents.PROJECT_SELECTION_PICKED,
+    fields: { projectId: project.id, sourceWorkspaceFolder: project.sourceWorkspaceFolder },
+  });
 
   const kind = await inspectDiagnosticsFile(selected.filePath);
-  logger.info(`Detected ${kind} diagnostics file for ${project.id}: ${selected.filePath}.`);
+  logger.info({
+    name: SphinxDoctorLogger.LogEvents.PROJECT_SELECTION_DETECTED,
+    fields: { projectId: project.id, kind },
+  });
 
   return {
     project,
@@ -283,10 +297,9 @@ export async function resolveProjectDiagnosticsFile(
 }
 
 export async function selectConfiguredProject(
-  logger: SphinxDoctorLogger,
+  _logger: SphinxDoctorLogger,
 ): Promise<ConfiguredProject | undefined> {
   const config = getExtensionConfig();
-  logger.setLevel(config.logLevel);
 
   if (config.projects.length === 0) {
     void vscode.window.showWarningMessage(
@@ -320,7 +333,6 @@ async function discoverProjectsFromWorkspace(
   logger: SphinxDoctorLogger,
 ): Promise<ConfiguredProject[]> {
   const config = getExtensionConfig();
-  logger.setLevel(config.logLevel);
 
   if (!config.discoveryEnabled) {
     return [];
@@ -351,7 +363,6 @@ export async function selectMergedProject(
   logger: SphinxDoctorLogger,
 ): Promise<ConfiguredProject | undefined> {
   const config = getExtensionConfig();
-  logger.setLevel(config.logLevel);
 
   const discoveredProjects = await discoverProjectsFromWorkspace(logger);
   const mergedProjects = mergeProjects(config.projects, discoveredProjects);

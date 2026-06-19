@@ -208,10 +208,15 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     this.activated = true;
     this.statusController.show();
     const config = getExtensionConfig();
-    this.logger.setLevel(config.logLevel);
-    this.logger.info(
-      `Watch mode startup: enabled=${config.watchEnabled}, autoLoadOnStartup=${config.watchAutoLoadOnStartup}, mode=${config.diagnosticsMode}, autoRun=${config.enrichmentAutoRun}, trusted=${vscode.workspace.isTrusted === true}.`,
-    );
+    this.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_STARTUP,
+      fields: {
+        watchEnabled: config.watchEnabled,
+        autoLoadOnStartup: config.watchAutoLoadOnStartup,
+        mode: config.diagnosticsMode,
+        autoRun: config.enrichmentAutoRun,
+      },
+    });
     this.refreshCoordinator.resetRefreshTrigger(config.watchDebounceMs);
     await runWatchModeStartup({
       config,
@@ -243,7 +248,6 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
 
   public async restart(reason: string): Promise<void> {
     const config = getExtensionConfig();
-    this.logger.setLevel(config.logLevel);
     this.refreshCoordinator.resetRefreshTrigger(config.watchDebounceMs);
     if (!config.watchEnabled) {
       this.disposeWatchers();
@@ -312,7 +316,10 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
     }
 
     for (const line of lines) {
-      this.logger.info(line);
+      this.logger.info({
+          name: SphinxDoctorLogger.LogEvents.WATCH_STATUS_REPORT_LINE,
+          fields: { line },
+        });
     }
     this.logger.show(true);
     void vscode.window.showInformationMessage(currentSummary.message);
@@ -489,10 +496,14 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       return;
     }
 
-    this.logger.info(`Saved file detected: ${document.uri.fsPath}.`);
+    this.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_FILE_SAVED,
+    });
     const config = getExtensionConfig();
     if (!config.refreshAutoRunOnSave) {
-      this.logger.info(`Ignoring saved file because refresh-on-save is disabled: ${document.uri.fsPath}.`);
+      this.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_FILE_SAVE_IGNORED_DISABLED,
+    });
       return;
     }
 
@@ -503,13 +514,20 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       isWorkspaceTrusted: vscode.workspace.isTrusted === true,
     });
     if (!decision.allowed || !decision.project) {
-      this.logger.info(`Ignoring saved file ${document.uri.fsPath}: ${decision.reason}`);
+      this.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_FILE_SAVE_IGNORED_DECISION,
+      fields: { reason: decision.reason },
+    });
       return;
     }
 
-    this.logger.info(
-      `Queued refresh-on-save for ${decision.project.id} from ${document.uri.fsPath} with debounce ${config.refreshDebounceMs}ms.`,
-    );
+    this.logger.info({
+      name: SphinxDoctorLogger.LogEvents.WATCH_FILE_SAVE_QUEUED,
+      fields: {
+        projectId: decision.project.id,
+        debounceMs: config.refreshDebounceMs,
+      },
+    });
     this.refreshCoordinator.getProjectRefreshTrigger(
       decision.project.id,
       getRefreshOnSaveDebounceMs(config),
@@ -546,10 +564,14 @@ export class SphinxDoctorWatchMode implements vscode.Disposable {
       );
       const handleEvent = (uri: vscode.Uri): void => {
         if (this.shouldSuppressWatchEvent(uri.fsPath)) {
-          this.logger.debug(`Ignoring internal watch event for ${uri.fsPath}`);
+          this.logger.debug({
+          name: SphinxDoctorLogger.LogEvents.WATCH_EVENT_IGNORED,
+        });
           return;
         }
-        this.logger.debug(`Watch event for ${uri.fsPath}`);
+        this.logger.debug({
+          name: SphinxDoctorLogger.LogEvents.WATCH_EVENT_DETECTED,
+        });
         this.scheduleRefresh(`artifact changed: ${path.basename(uri.fsPath)}`);
       };
       watcher.onDidCreate(handleEvent, this, this.context.subscriptions);

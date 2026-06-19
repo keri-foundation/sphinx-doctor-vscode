@@ -45,7 +45,10 @@ function logProcessOutput(
   }
 
   const lines = trimmed.split(/\r?\n/).slice(0, 5).join(' | ');
-  logger.debug(`${label}: ${lines}`);
+  logger.debug({
+    name: SphinxDoctorLogger.LogEvents.ENRICHMENT_DEBUG_LINES,
+    fields: { label, lines },
+  });
 }
 
 function resolveProjectLatestDiagnosticsPath(
@@ -110,7 +113,6 @@ export async function runRefreshAndLoadProjectDiagnostics(
   project: ConfiguredProject,
 ): Promise<void> {
   const config = getExtensionConfig();
-  dependencies.logger.setLevel(config.logLevel);
   const workspaceFolders = toWorkspaceFolderInfo(vscode.workspace.workspaceFolders);
   const refreshResolution = await inferProjectRefreshConfig({
     project,
@@ -140,9 +142,10 @@ export async function runRefreshAndLoadProjectDiagnostics(
     workspaceFolders,
     refreshCategory,
   });
-  dependencies.logger.info(
-    `Running refresh for ${project.id} (${refreshResolution.source ?? 'configured'}) with ${refreshPlan.command} ${refreshPlan.args.join(' ')} in ${refreshPlan.cwd}; source ${refreshPlan.sourceRoot}; inventory ${refreshPlan.inventoryRoot}.`,
-  );
+  dependencies.logger.info({
+    name: SphinxDoctorLogger.LogEvents.ENRICHMENT_REFRESH_FAILED,
+    fields: { projectId: project.id, source: refreshResolution.source ?? 'configured' },
+  });
 
   const refreshResult = await vscode.window.withProgress(
     {
@@ -152,9 +155,10 @@ export async function runRefreshAndLoadProjectDiagnostics(
     async () => runRefreshPlan(refreshPlan),
   );
 
-  dependencies.logger.info(
-    `Refresh finished with exit code ${refreshResult.exitCode}; source ${refreshResult.plan.sourceRoot}; inventory ${refreshResult.plan.inventoryRoot}; mirror ${refreshResult.plan.mirrorRootPath}.`,
-  );
+  dependencies.logger.info({
+    name: SphinxDoctorLogger.LogEvents.ENRICHMENT_START,
+    fields: { projectId: project.id, exitCode: refreshResult.exitCode },
+  });
   logProcessOutput(dependencies.logger, 'Refresh stdout', refreshResult.stdout);
   logProcessOutput(dependencies.logger, 'Refresh stderr', refreshResult.stderr);
 
@@ -190,7 +194,10 @@ export async function runRefreshAndLoadProjectDiagnostics(
 
     if (promotion.drift.detected) {
       const warning = `${formatRefreshScopeDriftWarning(projectLabel(project), promotion.drift)} Refreshed run preserved at ${refreshedDiagnostics.candidate.filePath}.`;
-      dependencies.logger.warn(warning);
+      dependencies.logger.warn({
+        name: SphinxDoctorLogger.LogEvents.ENRICHMENT_DRIFT_WARNING,
+        fields: { projectId: project.id },
+      });
       void vscode.window.showWarningMessage(warning);
       return;
     }
@@ -230,14 +237,16 @@ export async function runRefreshAndLoadProjectDiagnostics(
           rawIssuesPath: refreshedDiagnostics.candidate.filePath,
         });
 
-        dependencies.logger.info(
-          `Enriching refreshed diagnostics with ${plan.command} in ${plan.cwd}; raw ${plan.rawIssuesPath}; archive ${plan.archiveOutputPath}; latest ${plan.latestOutputPath}.`,
-        );
+        dependencies.logger.info({
+          name: SphinxDoctorLogger.LogEvents.ENRICHMENT_START,
+          fields: { projectId: project.id },
+        });
 
         const result = await runEnrichmentPlan(plan, { promoteLatest: false });
-        dependencies.logger.info(
-          `Refresh enrichment completed with exit code ${result.exitCode}; raw ${result.plan.rawIssuesPath}; archive ${result.plan.archiveOutputPath}; latest ${result.plan.latestOutputPath}.`,
-        );
+        dependencies.logger.info({
+          name: SphinxDoctorLogger.LogEvents.ENRICHMENT_COMPLETED,
+          fields: { projectId: project.id, exitCode: result.exitCode },
+        });
         logProcessOutput(dependencies.logger, 'Refresh enrichment stdout', result.stdout);
         logProcessOutput(dependencies.logger, 'Refresh enrichment stderr', result.stderr);
         return result;
@@ -252,7 +261,10 @@ export async function runRefreshAndLoadProjectDiagnostics(
 
     if (promotion.drift.detected) {
       const warning = `${formatRefreshScopeDriftWarning(projectLabel(project), promotion.drift)} Refreshed run preserved at ${enrichmentResult.plan.archiveOutputPath}.`;
-      dependencies.logger.warn(warning);
+      dependencies.logger.warn({
+        name: SphinxDoctorLogger.LogEvents.ENRICHMENT_DRIFT_WARNING,
+        fields: { projectId: project.id },
+      });
       void vscode.window.showWarningMessage(warning);
       return;
     }
@@ -301,7 +313,10 @@ export async function loadOrEnrichProjectDiagnostics(
 
   if (selected.kind === 'raw') {
     if (!allowEnrichment) {
-      dependencies.logger.warn(`Selected raw inventory file ${selected.candidate.filePath}; use the explicit enrichment command to transform it before publishing.`);
+      dependencies.logger.warn({
+        name: SphinxDoctorLogger.LogEvents.ENRICHMENT_SELECTED_RAW,
+        fields: { projectId: project.id },
+      });
       void vscode.window.showWarningMessage(
         `Sphinx Doctor found raw issues.json for ${projectLabel(project)}. Run Sphinx Doctor: Enrich and Load Project Diagnostics to transform and publish it.`,
       );
@@ -309,7 +324,6 @@ export async function loadOrEnrichProjectDiagnostics(
     }
 
     const config = getExtensionConfig();
-    dependencies.logger.setLevel(config.logLevel);
     const permission = getEnrichmentPermission(vscode.workspace.isTrusted, config.enrichmentEnabled);
     if (!permission.allowed) {
       void vscode.window.showWarningMessage(permission.reason ?? 'Sphinx Doctor enrichment is unavailable.');
@@ -330,14 +344,16 @@ export async function loadOrEnrichProjectDiagnostics(
           rawIssuesPath: selected.candidate.filePath,
         });
 
-        dependencies.logger.info(
-          `Running enrichment with ${plan.command} in ${plan.cwd}; raw ${plan.rawIssuesPath}; archive ${plan.archiveOutputPath}; latest ${plan.latestOutputPath}.`,
-        );
+        dependencies.logger.info({
+          name: SphinxDoctorLogger.LogEvents.ENRICHMENT_START,
+          fields: { projectId: project.id },
+        });
 
         const result = await runEnrichmentPlan(plan);
-        dependencies.logger.info(
-          `Enrichment completed with exit code ${result.exitCode}; raw ${result.plan.rawIssuesPath}; enriched ${result.plan.archiveOutputPath}; latest ${result.plan.latestOutputPath}.`,
-        );
+        dependencies.logger.info({
+          name: SphinxDoctorLogger.LogEvents.ENRICHMENT_COMPLETED,
+          fields: { projectId: project.id, exitCode: result.exitCode },
+        });
         logProcessOutput(dependencies.logger, 'Enrichment stdout', result.stdout);
         logProcessOutput(dependencies.logger, 'Enrichment stderr', result.stderr);
         return result;

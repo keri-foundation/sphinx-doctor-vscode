@@ -9,7 +9,7 @@ import {
   buildDiagnosticsCountsToastMessage,
 } from '../diagnostics/diagnosticsAccounting';
 import { SphinxDoctorLogger } from '../logging/extensionLogger';
-import { computeDiagnosticsAccounting, publishDiagnostics, type PublishLogger } from '../publication/publishDiagnostics';
+import { computeDiagnosticsAccounting, publishDiagnostics } from '../publication/publishDiagnostics';
 import { DiagnosticsPublicationIndex } from '../publication/publicationIndex';
 import type { LastLoadedDiagnosticsState } from '../types';
 import { SphinxDoctorWatchMode } from '../watch/watchMode';
@@ -33,13 +33,6 @@ interface LoadOptions {
   fixtureSourceRoot?: string;
   allowFirstFolderFallback?: boolean;
 }
-
-const NOOP_PUBLISH_LOGGER: PublishLogger = {
-  debug: () => {},
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-};
 
 function readLastLoadedDiagnosticsState(
   context: vscode.ExtensionContext,
@@ -66,16 +59,28 @@ export async function loadAndPublish(
   options: LoadOptions = {},
 ): Promise<void> {
   const config = getExtensionConfig();
-  dependencies.logger.setLevel(config.logLevel);
-  dependencies.logger.info(`Loading diagnostics file: ${fileUri.fsPath}`);
+  dependencies.logger.info({
+    name: SphinxDoctorLogger.LogEvents.COMMAND_LOAD_FILE,
+  });
 
   const contract = await loadDiagnosticsFromPath(fileUri.fsPath);
-  dependencies.logger.info(
-    `Loaded schema ${contract.schema} v${contract.schemaVersion} with ${contract.issues.length} issues; mapped ${contract.summary.mappedCount}, unmapped ${contract.summary.unmappedCount}.`,
-  );
-  dependencies.logger.info(
-    `Diagnostics contract publishable count: ${contract.summary.publishedDiagnostics}; retained-only count: ${contract.summary.retainedOnly}.`,
-  );
+  dependencies.logger.info({
+    name: SphinxDoctorLogger.LogEvents.COMMAND_LOAD_CONTRACT,
+    fields: {
+      schema: contract.schema,
+      schemaVersion: contract.schemaVersion,
+      issues: contract.issues.length,
+      mapped: contract.summary.mappedCount,
+      unmapped: contract.summary.unmappedCount,
+    },
+  });
+  dependencies.logger.info({
+    name: SphinxDoctorLogger.LogEvents.COMMAND_LOAD_PUBLISHABLE,
+    fields: {
+      publishedDiagnostics: contract.summary.publishedDiagnostics,
+      retainedOnly: contract.summary.retainedOnly,
+    },
+  });
 
   const result = publishDiagnostics(dependencies.collection, contract, {
     workspaceFolders: vscode.workspace.workspaceFolders,
@@ -97,10 +102,21 @@ export async function loadAndPublish(
     defaultRepoRoot: options.defaultRepoRootOverride,
   });
 
-  dependencies.logger.info(
-    `Published ${result.publishedDiagnostics} diagnostics in ${config.diagnosticsMode} mode across ${result.targetUriCount} target URIs; ${result.publishableBeforeFilter} were publishable before filter, ${result.filteredByMode} were filtered by mode, ${result.skippedIssues} were skipped, and ${result.resolutionFailures} hit resolution failures.`,
-  );
-  dependencies.logger.info('Diagnostics collection update completed.');
+  dependencies.logger.info({
+    name: SphinxDoctorLogger.LogEvents.COMMAND_LOAD_RESULT,
+    fields: {
+      publishedDiagnostics: result.publishedDiagnostics,
+      mode: config.diagnosticsMode,
+      targetUriCount: result.targetUriCount,
+      publishableBeforeFilter: result.publishableBeforeFilter,
+      filteredByMode: result.filteredByMode,
+      skippedIssues: result.skippedIssues,
+      resolutionFailures: result.resolutionFailures,
+    },
+  });
+  dependencies.logger.info({
+    name: SphinxDoctorLogger.LogEvents.COMMAND_LOAD_COMPLETED,
+  });
 
   const statusMessage =
     `Sphinx Doctor loaded ${result.issueCount} issues; ${result.publishableBeforeFilter} publishable before filter; ${result.publishedDiagnostics} published in ${config.diagnosticsMode} mode.`;
@@ -122,7 +138,6 @@ export async function explainDiagnosticsCounts(
   dependencies: CommandDependencies,
 ): Promise<void> {
   const config = getExtensionConfig();
-  dependencies.logger.setLevel(config.logLevel);
 
   const lastLoaded = readLastLoadedDiagnosticsState(context);
   if (!lastLoaded) {
@@ -149,7 +164,7 @@ export async function explainDiagnosticsCounts(
     defaultSourceWorkspaceFolder:
       lastLoaded.defaultSourceWorkspaceFolder ?? config.defaultSourceWorkspaceFolder,
     defaultRepoRoot: lastLoaded.defaultRepoRoot,
-    logger: NOOP_PUBLISH_LOGGER,
+    logger: dependencies.logger,
   });
   const report = buildDiagnosticsAccountingReport({
     contract,
@@ -159,7 +174,10 @@ export async function explainDiagnosticsCounts(
   });
 
   for (const line of report.split(/\r?\n/)) {
-    dependencies.logger.info(line);
+    dependencies.logger.info({
+      name: SphinxDoctorLogger.LogEvents.COMMAND_LOAD_EXPLAIN_LINE,
+      fields: { line },
+    });
   }
   dependencies.logger.show(true);
 
