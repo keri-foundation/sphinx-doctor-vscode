@@ -1,5 +1,7 @@
+import * as fs from 'node:fs';
 import * as vscode from 'vscode';
 
+import { checkDocstringRangeGate } from './docstringRangeGate';
 import { SphinxDoctorLogger } from '../logging/extensionLogger';
 import {
   buildDiagnosticMessage,
@@ -42,7 +44,13 @@ export interface PublishOptions {
 export type SkipReason =
   | 'not-publishable'
   | 'mode-filtered'
-  | 'no-target-uri';
+  | 'no-target-uri'
+  | 'publisher-range-not-in-docstring'
+  | 'publisher-range-outside-resolved-object-docstring'
+  | 'publisher-source-unavailable'
+  | 'publisher-column-out-of-bounds'
+  | 'publisher-docstring-delimiter-range'
+  | 'publisher-invalid-range';
 
 export interface PublishResult {
   issueCount: number;
@@ -109,6 +117,73 @@ function toRange(issue: DiagnosticsIssue): vscode.Range {
   return new vscode.Range(startLine, startColumn, endLine, endColumn);
 }
 
+interface SourceGuardResult {
+  passed: boolean;
+  skipReason: SkipReason;
+  reason: string;
+}
+
+/**
+ * Read the source file and verify that the diagnostic range lies within a
+ * real Python triple-quoted docstring span.
+ *
+ * When the issue carries resolved-object docstring metadata, also require
+ * the range to be inside that specific object's docstring (not just any
+ * docstring in the file).
+ */
+export function verifyRangeInSourceDocstring(
+  issue: DiagnosticsIssue,
+  filePath: string | undefined,
+  logger: SphinxDoctorLogger,
+): SourceGuardResult {
+  if (!filePath || !issue.sourceRange) {
+    return {
+      passed: false,
+      skipReason: 'publisher-source-unavailable',
+      reason: `Cannot verify range: filePath=${filePath ?? 'undefined'}, sourceRange=${issue.sourceRange ? 'present' : 'null'}`,
+    };
+  }
+
+  let content: string;
+  try {
+    content = fs.readFileSync(filePath, 'utf8');
+  } catch (err) {
+    logger.warn({
+      name: SphinxDoctorLogger.LogEvents.PUBLICATION_ISSUE_SKIPPED,
+      fields: { issueId: issue.id, reason: `Cannot read source file: ${filePath}` },
+    });
+    return {
+      passed: false,
+      skipReason: 'publisher-source-unavailable',
+      reason: `Cannot read source file: ${filePath}`,
+    };
+  }
+
+  const sl = issue.sourceRange.startLine;
+  const el = issue.sourceRange.endLine;
+  const sc = issue.sourceRange.startColumn;
+  const ec = issue.sourceRange.endColumn;
+
+  const gateResult = checkDocstringRangeGate(
+    content,
+    sl,
+    el,
+    issue.docstringStartLine,
+    issue.docstringEndLine,
+    sc,
+    ec,
+  );
+
+  if (!gateResult.passed) {
+    logger.warn({
+      name: SphinxDoctorLogger.LogEvents.PUBLICATION_ISSUE_SKIPPED,
+      fields: { issueId: issue.id, reason: gateResult.reason },
+    });
+  }
+
+  return gateResult;
+}
+
 function collectDiagnostics(
   contract: DiagnosticsContract,
   options: PublishOptions,
@@ -124,12 +199,24 @@ function collectDiagnostics(
     'not-publishable': 0,
     'mode-filtered': 0,
     'no-target-uri': 0,
+    'publisher-range-not-in-docstring': 0,
+    'publisher-range-outside-resolved-object-docstring': 0,
+    'publisher-source-unavailable': 0,
+    'publisher-column-out-of-bounds': 0,
+    'publisher-docstring-delimiter-range': 0,
+    'publisher-invalid-range': 0,
   };
   // Collect up to 5 samples per skip reason for diagnosis
   const skipSamples: Record<SkipReason, DiagnosticsIssue[]> = {
     'not-publishable': [],
     'mode-filtered': [],
     'no-target-uri': [],
+    'publisher-range-not-in-docstring': [],
+    'publisher-range-outside-resolved-object-docstring': [],
+    'publisher-source-unavailable': [],
+    'publisher-column-out-of-bounds': [],
+    'publisher-docstring-delimiter-range': [],
+    'publisher-invalid-range': [],
   };
 
   for (const issue of contract.issues) {
@@ -142,18 +229,36 @@ function collectDiagnostics(
       continue;
     }
 
-    publishableBeforeFilter += 1;
-
-    if (!issueMatchesDiagnosticMode(issue, options.diagnosticMode) && options.applyDiagnosticModeFilter !== false) {
-      skippedIssues += 1;
-      filteredByMode += 1;
-      skipReasons['mode-filtered'] += 1;
-      if (skipSamples['mode-filtered'].length < 5) {
-        skipSamples['mode-filtered'].push(issue);
+    // Defensive fail-closed check: if the issue carries docstring-span metadata,
+    // the published range must lie wholly within that span.  This guards against
+    // any upstream parser or mapper defect that labels an unsafe range as
+    // publishable.
+    if (issue.docstringStartLine != null && issue.docstringEndLine != null && issue.sourceRange) {
+      const sl = issue.sourceRange.startLine;
+      const el = issue.sourceRange.endLine;
+      if (sl < issue.docstringStartLine || el > issue.docstringEndLine) {
+        skippedIssues += 1;
+        skipReasons['not-publishable'] += 1;
+        if (skipSamples['not-publishable'].length < 5) {
+          skipSamples['not-publishable'].push(issue);
+        }
+        options.logger.warn({
+          name: SphinxDoctorLogger.LogEvents.PUBLICATION_ISSUE_SKIPPED,
+          fields: {
+            issueId: issue.id,
+            reason: `Published range [${sl}, ${el}] outside docstring span [${issue.docstringStartLine}, ${issue.docstringEndLine}] — blocked by publisher`,
+          },
+        });
+        continue;
       }
-      continue;
     }
 
+    // ── Publisher source guard ──────────────────────────────────────────
+    // Independently verify that the diagnostic range lies within a real
+    // triple-quoted Python docstring span in the current source file.
+    // This is the last line of defence — it does not trust mapper metadata.
+    //
+    // Resolve the file path first so the guard can read the source.
     const resolution = resolveIssueFilePath(contract, issue, {
       workspaceFolders,
       defaultSourceWorkspaceFolder: options.defaultSourceWorkspaceFolder,
@@ -173,6 +278,41 @@ function collectDiagnostics(
         name: SphinxDoctorLogger.LogEvents.PUBLICATION_ISSUE_SKIPPED,
         fields: { issueId: issue.id, reason: resolution.reason ?? 'Issue path could not be resolved.' },
       });
+      continue;
+    }
+
+    if (issue.sourceRange && issue.repoRelativePath) {
+      const sourceGuardResult = verifyRangeInSourceDocstring(
+        issue,
+        resolution.filePath,
+        options.logger,
+      );
+      if (!sourceGuardResult.passed) {
+        skippedIssues += 1;
+        skipReasons[sourceGuardResult.skipReason] += 1;
+        if (skipSamples[sourceGuardResult.skipReason].length < 5) {
+          skipSamples[sourceGuardResult.skipReason].push(issue);
+        }
+        options.logger.warn({
+          name: SphinxDoctorLogger.LogEvents.PUBLICATION_ISSUE_SKIPPED,
+          fields: {
+            issueId: issue.id,
+            reason: sourceGuardResult.reason,
+          },
+        });
+        continue;
+      }
+    }
+
+    publishableBeforeFilter += 1;
+
+    if (!issueMatchesDiagnosticMode(issue, options.diagnosticMode) && options.applyDiagnosticModeFilter !== false) {
+      skippedIssues += 1;
+      filteredByMode += 1;
+      skipReasons['mode-filtered'] += 1;
+      if (skipSamples['mode-filtered'].length < 5) {
+        skipSamples['mode-filtered'].push(issue);
+      }
       continue;
     }
 
@@ -269,6 +409,12 @@ export function publishDiagnosticsBatch(
     'not-publishable': 0,
     'mode-filtered': 0,
     'no-target-uri': 0,
+    'publisher-range-not-in-docstring': 0,
+    'publisher-range-outside-resolved-object-docstring': 0,
+    'publisher-source-unavailable': 0,
+    'publisher-column-out-of-bounds': 0,
+    'publisher-docstring-delimiter-range': 0,
+    'publisher-invalid-range': 0,
   };
   const replaceMode = options.replaceMode ?? 'full';
   const affectedProjectKeys = new Set<string>();
@@ -293,7 +439,15 @@ export function publishDiagnosticsBatch(
     skippedIssues += collected.result.skippedIssues;
     resolutionFailures += collected.result.resolutionFailures;
     if (collected.result.skipReasons) {
-      for (const reason of ['not-publishable', 'mode-filtered', 'no-target-uri'] as SkipReason[]) {
+      for (const reason of [
+        'not-publishable', 'mode-filtered', 'no-target-uri',
+        'publisher-range-not-in-docstring',
+        'publisher-range-outside-resolved-object-docstring',
+        'publisher-source-unavailable',
+        'publisher-column-out-of-bounds',
+        'publisher-docstring-delimiter-range',
+        'publisher-invalid-range',
+      ] as SkipReason[]) {
         mergedSkipReasons[reason] += collected.result.skipReasons[reason];
       }
     }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
@@ -85,4 +86,62 @@ test('extension manifest exposes local package and install scripts', async () =>
     manifest.scripts['install:local'],
     'npm run package && code --install-extension ./artifacts/sphinx-doctor-vscode-$npm_package_version.vsix --force',
   );
+});
+
+test('compiled output contains every runtime module required at extension activation', () => {
+  const outDir = path.resolve('out', 'src');
+
+  // These modules are loaded at activation (extension.ts → registerCommands → …)
+  const requiredModules = [
+    'extension.js',
+    'types.js',
+    'commands/registerCommands.js',
+    'commands/directRun.js',
+    'commands/directRunSaveRepublisher.js',
+    'commands/diagnosticsLoading.js',
+    'commands/projectSelection.js',
+    'commands/refreshAndEnrichment.js',
+    'commands/runSafely.js',
+    'commands/selfTestDiagnostic.js',
+    'config/extensionConfig.js',
+    'constants/config.js',
+    'constants/selfTest.js',
+    'diagnostics/diagnosticsAccounting.js',
+    'diagnostics/loadAllDiagnostics.js',
+    'diagnostics/loadDiagnostics.js',
+    'docstrings/PythonDocstringSourceMapper.js',
+    'docstrings/TextPythonDocstringSourceMapper.js',
+    'enrichment/enrichmentRunner.js',
+    'logging/extensionLogger.js',
+    'publication/publicationIndex.js',
+    'publication/publishDiagnostics.js',
+    'refresh/refreshRunner.js',
+    'sphinx/SphinxDoctorRunner.js',
+    'sphinx/SphinxWarningParser.js',
+    'sphinx/sphinxWarningSummary.js',
+    'watch/watchMode.js',
+    'watch/watchModeState.js',
+    'watch/watchFormatting.js',
+    'watch/watchStatus.js',
+    'watch/watchDiagnosticsState.js',
+    'watch/watchEventSuppression.js',
+    'watch/watchProjectRefresh.js',
+    'watch/watchRefreshCoordinator.js',
+    'workspace/inventoryCandidates.js',
+    'workspace/projectDiscovery.js',
+    'docstrings/remediation/docstringRemediationAssessment.js',
+    'docstrings/remediation/docstringRemediationPolicy.js',
+  ];
+
+  for (const mod of requiredModules) {
+    const fullPath = path.join(outDir, mod);
+    assert.ok(existsSync(fullPath), `Missing compiled module: ${fullPath}`);
+  }
+});
+
+test('package.json main entry exists in compiled output', () => {
+  const raw = require('fs').readFileSync(path.resolve('package.json'), 'utf-8');
+  const manifest = JSON.parse(raw);
+  const mainPath = path.resolve(manifest.main);
+  assert.ok(existsSync(mainPath), `main entry "${manifest.main}" does not exist at ${mainPath}`);
 });

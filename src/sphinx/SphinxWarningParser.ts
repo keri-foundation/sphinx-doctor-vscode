@@ -236,30 +236,52 @@ function createDiagnosticsIssue(
         return null;
       }
 
-      // Only publish when AST/Tree-sitter provides a high-confidence absolute source line.
-      // Docstring-relative line numbers (e.g., :7: inside the docstring text) are not
-      // valid source file positions and produce misleading Problem markers.
-      const hasSafeMapping = astMapping?.confidence === 'high' && astMapping.targetLine !== undefined;
-      const absoluteLine = hasSafeMapping ? astMapping!.targetLine! : warning.docstringLine;
-      const confidence = astMapping?.confidence ?? 'medium';
-      const reason = astMapping?.reason
-        ?? `Docstring warning for ${warning.objectPath} at docstring line ${warning.docstringLine} (no AST mapping available — not published to Problems)`;
-      const lineResolved = hasSafeMapping;
+      // Verify the mapped source range lies within the resolved docstring span.
+      // A high-confidence mapper result that places the target line outside its
+      // own reported docstring boundaries is a mapping defect and must not be
+      // published to Problems.
+      const mapperConfidence = astMapping?.confidence ?? 'medium';
+      const mapperTargetLine = astMapping?.targetLine;
+      const dsStart = astMapping?.docstringStartLine;
+      const dsEnd = astMapping?.docstringEndLine;
+      const rangeWithinDocstring = dsStart !== undefined
+        && dsEnd !== undefined
+        && mapperTargetLine !== undefined
+        && mapperTargetLine >= dsStart
+        && mapperTargetLine <= dsEnd;
 
-      const sourceRange: DiagnosticsSourceRange = {
-        startLine: absoluteLine,
-        startColumn: astMapping?.startColumn ?? 0,
-        endLine: absoluteLine,
-        endColumn: astMapping?.endColumn ?? 0,
-        anchorKind: hasSafeMapping ? 'docstring-line' : 'docstring-line-fallback',
-      };
+      // Only publish when ALL conditions are true:
+      //   - mapper returned high confidence
+      //   - target line is defined
+      //   - target line falls within the resolved docstring span
+      const hasSafeMapping = mapperConfidence === 'high'
+        && mapperTargetLine !== undefined
+        && rangeWithinDocstring;
+
+      const absoluteLine = hasSafeMapping ? mapperTargetLine! : warning.docstringLine;
+      const confidence = hasSafeMapping ? 'high' : (rangeWithinDocstring ? 'medium' : mapperConfidence);
+      const reason = hasSafeMapping
+        ? (astMapping?.reason ?? `Mapped to source line ${absoluteLine} in docstring of ${warning.objectPath}`)
+        : !rangeWithinDocstring && dsStart !== undefined && dsEnd !== undefined && mapperTargetLine !== undefined
+          ? `Mapped line ${mapperTargetLine} is outside resolved docstring span [${dsStart}, ${dsEnd}] for ${warning.objectPath} — not published to Problems`
+          : (astMapping?.reason ?? `Docstring warning for ${warning.objectPath} at docstring line ${warning.docstringLine} (no safe mapping available — not published to Problems)`);
+
+      const sourceRange: DiagnosticsSourceRange | null = hasSafeMapping
+        ? {
+            startLine: absoluteLine,
+            startColumn: astMapping?.startColumn ?? 0,
+            endLine: absoluteLine,
+            endColumn: astMapping?.endColumn ?? 0,
+            anchorKind: 'docstring-line',
+          }
+        : null;
 
       const mapping: DiagnosticsMapping = {
         confidence,
         strategy: 'sphinx-docstring-warning',
         reason,
-        objectResolved: true,
-        lineResolved,
+        objectResolved: hasSafeMapping,
+        lineResolved: hasSafeMapping,
       };
 
       const id = `sphinx-${index ?? Date.now()}-${repoRelativePath}-${warning.objectPath}-${warning.docstringLine}`;
@@ -276,11 +298,14 @@ function createDiagnosticsIssue(
         rawLocation: `${warning.filePath}:docstring of ${warning.objectPath}:${warning.docstringLine}`,
         sourceRange,
         mapping,
-        // Only publish when we have a high-confidence AST-mapped source line.
-        // Fallback docstring-relative lines would misplace Problem markers on arbitrary code.
+        // Only publish when we have a verified safe mapping.
+        // The range must be inside the resolved docstring span.
         publishDiagnostic: hasSafeMapping,
         related: [],
         sourceWorkspaceFolder,
+        // Preserve docstring span for downstream defensive checks
+        docstringStartLine: dsStart,
+        docstringEndLine: dsEnd,
       };
     }
 

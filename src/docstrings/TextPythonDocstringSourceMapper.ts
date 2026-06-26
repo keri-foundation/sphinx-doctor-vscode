@@ -202,30 +202,78 @@ const TRIPLE_QUOTE_RE = /^\s*(?:r|u|ur|ru|b|br|rb|f|fr|rf)?("""|''')/;
 
 /**
  * Find a class or function definition by scanning source lines.
+ *
+ * For single-part targets (module-level functions): finds the first matching
+ * ``def <name>(`` or ``class <name>``.
+ *
+ * For multi-part targets (class + method): finds the class first, then
+ * searches for the method definition AFTER the class declaration with
+ * indentation strictly greater than the class's indentation.  This prevents
+ * a same-named module-level function from being matched when Sphinx reports
+ * a class-qualified method warning.
  */
 export function findDefinition(lines: string[], targetParts: string[]): DefResult | null {
   if (targetParts.length === 0) return null;
 
-  const found: DefResult[] = [];
-  let targetIdx = targetParts.length - 1;
+  // Single-part: module-level function or standalone class
+  if (targetParts.length === 1) {
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (DECORATOR_RE.test(line)) continue;
+      const classMatch = CLASS_DEF_RE.exec(line);
+      const defMatch = DEF_RE.exec(line);
+      const name = classMatch ? classMatch[1] : defMatch ? defMatch[1] : null;
+      if (name && name === targetParts[0]) {
+        return { defLine: i, indent: line.search(/\S/) };
+      }
+    }
+    return null;
+  }
 
-  for (let i = 0; i < lines.length && targetIdx >= 0; i++) {
+  // Multi-part: class-qualified method — find class first, then method inside it
+  const className = targetParts[0];
+  const methodName = targetParts[1];
+
+  // Find the class definition
+  let classDef: DefResult | null = null;
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (DECORATOR_RE.test(line)) continue;
-
     const classMatch = CLASS_DEF_RE.exec(line);
-    const defMatch = DEF_RE.exec(line);
-    const name = classMatch ? classMatch[1] : defMatch ? defMatch[1] : null;
-
-    if (name && name === targetParts[targetIdx]) {
-      const indent = line.search(/\S/);
-      found.push({ defLine: i, indent });
-      targetIdx--;
+    if (classMatch && classMatch[1] === className) {
+      classDef = { defLine: i, indent: line.search(/\S/) };
+      break;
     }
   }
 
-  // Return the innermost match (first found when scanning targetParts from end)
-  return found.length > 0 ? found[0] : null;
+  if (!classDef) return null;
+
+  // Find the method AFTER the class with deeper indentation
+  for (let i = classDef.defLine + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (DECORATOR_RE.test(line)) continue;
+
+    // If we encounter another class/function at same or shallower indent,
+    // we've left the class scope — stop searching
+    const classMatch = CLASS_DEF_RE.exec(line);
+    if (classMatch) {
+      const indent = line.search(/\S/);
+      if (indent <= classDef.indent) break;
+      continue;  // nested class — continue searching within it
+    }
+
+    const defMatch = DEF_RE.exec(line);
+    if (!defMatch) continue;
+
+    if (defMatch[1] === methodName) {
+      const indent = line.search(/\S/);
+      if (indent > classDef.indent) {
+        return { defLine: i, indent };
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -264,6 +312,70 @@ export function findDocstring(lines: string[], defLine: number): DocstringBlock 
 }
 
 // ---- UTF-16 offset helpers ----
+
+/**
+ * Find ALL triple-quoted docstring spans in a Python source file.
+ *
+ * Scans every line for `"""` or `'''` pairs and returns the 0-indexed
+ * [startLine, endLine] span for each.  Unlike ``findDocstring``, this is
+ * not restricted to docstrings immediately after class/def headers — it
+ * detects ALL triple-quoted strings so the publisher can independently
+ * verify that a diagnostic range lies inside any Python docstring.
+ */
+export function findAllDocstringSpans(lines: string[]): DocstringBlock[] {
+  const spans: DocstringBlock[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const match = TRIPLE_QUOTE_RE.exec(lines[i]);
+    if (!match) continue;
+
+    const quote = match[1];
+    const startLine = i;
+
+    // Single-line docstring?
+    const afterOpening = lines[i].substring(lines[i].indexOf(quote) + 3);
+    if (afterOpening.includes(quote)) {
+      spans.push({ startLine, endLine: startLine });
+      continue;
+    }
+
+    // Multi-line: find closing quote
+    for (let j = i + 1; j < lines.length; j++) {
+      if (lines[j].includes(quote)) {
+        spans.push({ startLine, endLine: j });
+        i = j; // skip past this docstring
+        break;
+      }
+    }
+  }
+
+  return spans;
+}
+
+/**
+ * Test whether a 1-indexed source range [startLine, endLine] lies wholly
+ * within one of the given 0-indexed docstring spans.
+ *
+ * A range is "inside" a docstring span when every line from startLine
+ * through endLine falls within [span.startLine, span.endLine] (inclusive,
+ * after converting the 1-indexed lines to 0-indexed).
+ */
+export function isRangeInDocstringSpan(
+  spans: DocstringBlock[],
+  startLine: number,
+  endLine: number,
+): boolean {
+  const start0 = startLine - 1;
+  const end0 = endLine - 1;
+
+  for (const span of spans) {
+    if (start0 >= span.startLine && end0 <= span.endLine) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 /**
  * Compute the visible-content column range for a single source line.
