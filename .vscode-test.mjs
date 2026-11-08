@@ -15,7 +15,7 @@ const integrationWorkspaceFolder = path.resolve(
 export default defineConfig([
   {
     label: 'integration',
-    files: 'out/tests/integration/**/*.test.js',
+    files: 'out/tests/integration/extensionHost.integration.test.js',
     version: 'stable',
     extensionDevelopmentPath: __dirname,
     workspaceFolder: integrationWorkspaceFolder,

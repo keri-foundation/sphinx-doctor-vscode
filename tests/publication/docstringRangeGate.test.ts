@@ -202,4 +202,3 @@ test('gate passes when columns are omitted and line is inside docstring', () => 
 
   assert.strictEqual(result.passed, true);
 });
-
