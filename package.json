@@ -25,15 +25,16 @@
   ],
   "main": "./out/src/extension.js",
   "scripts": {
-    "compile": "tsc -p ./ && npm run copy-wasm",
-    "copy-wasm": "node scripts/copy-wasm.js",
+    "compile": "tsc -p ./",
     "watch": "tsc -w -p ./",
+    "clean:out": "node -e \"require('fs').rmSync('out', { recursive: true, force: true })\"",
     "test": "npm run test:unit",
-    "test:unit": "npm run compile && node --test out/tests/extension.test.js",
+    "test:unit": "npm run clean:out && npm run compile && node scripts/run-unit-tests.mjs",
     "test:integration": "npm run compile && vscode-test --label integration",
+    "test:real-problems": "npm run compile && vscode-test --config .vscode-test.real-problems.mjs",
     "test:all": "npm run test:unit && npm run test:integration",
-    "package": "npm exec --yes --package @vscode/vsce -- vsce package",
-    "install:local": "npm run package && code --install-extension ./sphinx-doctor-vscode-$npm_package_version.vsix --force",
+    "package": "node scripts/package-vsix.mjs",
+    "install:local": "npm run package && code --install-extension ./artifacts/sphinx-doctor-vscode-$npm_package_version.vsix --force",
     "reinstall:local": "bash scripts/reinstall-local-vsix.sh",
     "vscode:prepublish": "npm run compile"
   },
@@ -294,19 +295,8 @@
         "sphinxDoctor.refresh.debounceMs": {
           "type": "number",
           "default": 1500,
-          "description": "Debounce delay for save-triggered project refresh. Separate from diagnostics file watcher debounce.",
+          "description": "Debounce delay for save-triggered project refresh and save-triggered direct-run diagnostic republishing. Separate from diagnostics file watcher debounce.",
           "minimum": 100
-        },
-        "sphinxDoctor.logLevel": {
-          "type": "string",
-          "enum": [
-            "debug",
-            "info",
-            "warn",
-            "error"
-          ],
-          "default": "info",
-          "description": "Log level for the Sphinx Doctor output channel."
         },
         "sphinxDoctor.directRun.enabled": {
           "type": "boolean",
@@ -358,8 +348,5 @@
     "mocha": "^11.1.0",
     "typescript": "^5.8.3"
   },
-  "dependencies": {
-    "tree-sitter-wasms": "^0.1.13",
-    "web-tree-sitter": "^0.26.9"
-  }
+  "dependencies": {}
 }

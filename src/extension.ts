@@ -1,14 +1,12 @@
 import * as vscode from 'vscode';
 
-import { registerCommands } from './commands';
-import { getExtensionConfig } from './config';
-import { createLogger } from './log';
-import { DiagnosticsPublicationIndex } from './publicationIndex';
-import { SphinxDoctorWatchMode } from './watchMode';
+import { registerCommands } from './commands/registerCommands';
+import { SphinxDoctorLogger } from './logging/extensionLogger';
+import { DiagnosticsPublicationIndex } from './publication/publicationIndex';
+import { SphinxDoctorWatchMode } from './watch/watchMode';
 
 export function activate(context: vscode.ExtensionContext): void {
-  const config = getExtensionConfig();
-  const logger = createLogger(config.logLevel);
+  const logger = SphinxDoctorLogger.create();
   const collection = vscode.languages.createDiagnosticCollection('sphinx-doctor');
   const publicationIndex = new DiagnosticsPublicationIndex<vscode.Uri>();
   const watchMode = new SphinxDoctorWatchMode(context, collection, logger, publicationIndex);
@@ -17,7 +15,9 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(collection);
   context.subscriptions.push(watchMode);
 
-  logger.info('Sphinx Doctor activated.');
+  logger.info({
+    name: SphinxDoctorLogger.LogEvents.EXTENSION_ACTIVATED,
+  });
   registerCommands(context, { collection, logger, watchMode, publicationIndex });
   void watchMode.start();
 }

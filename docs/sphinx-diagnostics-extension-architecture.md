@@ -33,7 +33,7 @@ The canonical contract schema lives at [schema/sphinx-diagnostics-v1.schema.json
 
 ### Watch mode and project orchestration
 
-[src/watchMode.ts](../src/watchMode.ts) is the main coordinator. It merges configured and discovered projects, watches mirror and inventory locations, loads diagnostics on startup, and routes refresh or enrichment requests through the runtime safety checks.
+Watch-mode coordination lives under [src/watch/watchMode.ts](../src/watch/watchMode.ts). It merges configured and discovered projects, watches mirror and inventory locations, loads diagnostics on startup, and routes refresh or enrichment requests through the runtime safety checks.
 
 ### Refresh and enrichment boundaries
 
@@ -47,7 +47,17 @@ These commands are optional and require a trusted workspace. Read-only loading o
 
 [src/config.ts](../src/config.ts), [src/projectDiscovery.ts](../src/projectDiscovery.ts), and [src/workspace.ts](../src/workspace.ts) define the project model, discovery rules, and workspace-folder resolution logic that make the extension work in multi-root setups.
 
-## Data Flow
+## Direct-Run Lane
+
+In addition to loading pre-built diagnostics contracts, Sphinx Doctor supports a direct-run lane that runs `sphinx-build` from within the extension and publishes results immediately:
+
+1. `Sphinx Doctor: Run Sphinx Build` executes `sphinx-build` with the configured source/output/warning-file paths.
+2. Warnings are parsed, mapped through the text-based Python docstring source mapper, and published as native VS Code diagnostics.
+3. Published diagnostics use **mapped-line presentation ranges**: the squiggle covers the visible non-whitespace content of the mapped source line, excluding leading indentation and trailing whitespace. This is a presentation range, not a token-precise Python lexical span.
+4. The direct-run lane is not an LSP server or language-client implementation. Diagnostics flow through VS Code's `DiagnosticCollection` API.
+5. The lane supports a manual docstring-triage workflow: run diagnostics → navigate from Problems → manually edit source → rerun diagnostics. It does not perform automated document mutation.
+
+The direct-run lane is proven against a real Keripy workspace via `npm run test:real-problems`.
 
 The normal flow is:
 
@@ -80,15 +90,19 @@ The bridge converts an existing enriched contract into parseable terminal output
 
 ## Current Boundaries
 
-Sphinx Doctor currently aims to be a diagnostics consumer and workspace orchestrator.
+Sphinx Doctor publishes mapped Sphinx diagnostics through VS Code's Problems API.
 
 It is not trying to:
 
 - replace Sphinx itself
-- act as a general-purpose language server
+- act as a general-purpose language server or LSP implementation
+- perform automated source mutation, Code Actions, or WorkspaceEdits
+- provide token-precise lexical parsing (mapped-line ranges are presentation-only)
 - hide workspace ownership rules behind one implicit working directory
 
-That narrow scope keeps the extension testable and makes the public contract easier to understand.
+Development Host behavior against Keripy is proven by the targeted real-workspace extension-host test. Local VSIX packaging exists under `artifacts/`, but installed-VSIX runtime validation is a separate step.
+
+Automated docstring mutation, AI-assisted edits, Tree-sitter, and WASM parsing are not part of the current extension behavior.
 
 ## Related Documents
 

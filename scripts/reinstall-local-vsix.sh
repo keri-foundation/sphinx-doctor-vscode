@@ -35,9 +35,9 @@ echo ""
 echo "--- Package ---"
 npm run package
 
-vsix="$(ls -t sphinx-doctor-vscode-*.vsix 2>/dev/null | head -1 || true)"
+vsix="$(ls -t artifacts/sphinx-doctor-vscode-*.vsix 2>/dev/null | head -1 || true)"
 if [[ -z "${vsix}" ]]; then
-  echo "ERROR: No sphinx-doctor-vscode-*.vsix found after package." >&2
+  echo "ERROR: No artifacts/sphinx-doctor-vscode-*.vsix found after package." >&2
   exit 1
 fi
 

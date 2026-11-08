@@ -81,6 +81,10 @@ export interface DiagnosticsIssue {
   objectName?: string | null;
   objectKind?: string | null;
   docstringLine?: number | null;
+  /** 1-indexed start line of the resolved docstring block (including the opening """). */
+  docstringStartLine?: number | null;
+  /** 1-indexed end line of the resolved docstring block (including the closing """). */
+  docstringEndLine?: number | null;
   sourceWorkspaceFolder?: string;
   inventoryWorkspaceFolder?: string;
   repoRelativePath?: string | null;
@@ -150,7 +154,6 @@ export interface ExtensionConfig {
   refreshAutoRunOnStartup: boolean;
   refreshAutoRunOnSave: boolean;
   refreshDebounceMs: number;
-  logLevel: SphinxDoctorLogLevel;
   directRunEnabled: boolean;
   sphinxCommand: string;
   sphinxBuilder: string;
